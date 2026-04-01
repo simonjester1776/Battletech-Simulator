@@ -4,12 +4,17 @@
   "version": "2.1.1",
   "description": "Full-stack BattleTech tactical combat simulator with online multiplayer, campaign mode, and mission objectives",
   "type": "module",
+  "main": "electron-main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "vite --host 0.0.0.0 --port 3000"
+    "start": "vite --host 0.0.0.0 --port 3000",
+    "electron": "electron .",
+    "electron:dev": "concurrently \"yarn start\" \"wait-on http://localhost:3000 && electron .\"",
+    "build:electron": "yarn build && electron-builder",
+    "package:win": "yarn build && electron-builder --win --x64"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -77,5 +82,51 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4"
+  },
+  "build": {
+    "appId": "com.jestersreavers.battletech",
+    "productName": "BattleTech Tactical Simulator",
+    "directories": {
+      "output": "electron-dist",
+      "buildResources": "public"
+    },
+    "files": [
+      "dist/**/*",
+      "electron-main.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "backend/dist",
+        "to": "backend",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "public/vite.svg",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "BattleTech Simulator"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "category": "Game"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.games"
+    }
   }
 }
