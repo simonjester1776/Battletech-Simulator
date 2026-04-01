@@ -1,1 +1,4 @@
-/.snapshots
+/.snapshots-e 
+# Environment files
+*.env
+*.env.*
