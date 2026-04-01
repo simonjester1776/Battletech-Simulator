@@ -30,7 +30,7 @@ export interface MechBay {
   condition: number; // 0-100%
   repairCost: number;
   repairTime: number; // in days
-  assigned Pilot: string | null;
+  assignedPilot: string | null;
 }
 
 export interface MercenaryCompany {

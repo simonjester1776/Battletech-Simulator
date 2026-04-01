@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import type { GameState, Unit, Hex } from '@/types/battletech';
-import { TerrainType, MovementMode } from '@/types/battletech';
+import { TerrainType, MovementMode, UnitType } from '@/types/battletech';
 import { 
   initializeGame, 
   rollInitiative, 
@@ -18,33 +18,44 @@ import {
   checkGameOver
 } from '@/engine/game';
 import { getHexKey } from '@/engine/hexgrid';
-import { getAllUnits, cloneUnit } from '@/engine/units';
+import { getAllUnitsAndVehicles, cloneUnit } from '@/engine/units';
 import { saveGame, loadGame, getSaveList, exportGameAsFile } from '@/lib/save-system';
+import { CampaignManager } from '@/lib/campaign';
+import type { Contract } from '@/lib/campaign';
+import type { GameMode } from '@/lib/multiplayer';
 
 import { HexGrid } from '@/components/HexGrid';
 import { UnitPanel } from '@/components/UnitPanel';
 import { GameLog } from '@/components/GameLog';
 import { ControlPanel } from '@/components/ControlPanel';
+import { CampaignScreen } from '@/components/CampaignScreen';
+import { MultiplayerLobby } from '@/components/MultiplayerLobby';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { Swords, Users, BookOpen, Save, FolderOpen, Download } from 'lucide-react';
+import { Swords, Users, BookOpen, Save, FolderOpen, Download, Gamepad2, Trophy } from 'lucide-react';
+
+type AppScreen = 'main-menu' | 'setup' | 'game' | 'campaign' | 'multiplayer-lobby';
 
 function App() {
+  const [currentScreen, setCurrentScreen] = useState<AppScreen>('main-menu');
+  const [gameMode, setGameMode] = useState<'singleplayer' | 'campaign' | 'hotseat' | 'network'>('singleplayer');
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [showSetup, setShowSetup] = useState(true);
   const [gameOver, setGameOver] = useState<{ gameOver: boolean; winner: 'player' | 'ai' | 'draw' | null } | null>(null);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [savedGames, setSavedGames] = useState<Array<{ id: string; name: string; timestamp: number }>>([]);
   
+  const [campaignManager, setCampaignManager] = useState<CampaignManager | null>(null);
+  const [currentContract, setCurrentContract] = useState<Contract | null>(null);
+  
   const [playerSelections, setPlayerSelections] = useState<string[]>(['atlas', 'warhammer', 'hunchback']);
   const [aiSelections, setAiSelections] = useState<string[]>(['timber-wolf', 'marauder']);
   
-  const availableUnits = getAllUnits();
+  const availableUnits = getAllUnitsAndVehicles();
   
   // Keyboard shortcuts
   useEffect(() => {
@@ -100,7 +111,7 @@ function App() {
     const loadedState = loadGame(saveId);
     if (loadedState) {
       setGameState(loadedState);
-      setShowSetup(false);
+      setCurrentScreen("game");
       setShowLoadDialog(false);
       setGameOver(null);
     } else {
@@ -127,14 +138,38 @@ function App() {
     
     const newGame = initializeGame(playerUnits, aiUnits);
     setGameState(newGame);
-    setShowSetup(false);
+    setCurrentScreen("game");
     setGameOver(null);
   }, [playerSelections, aiSelections, availableUnits]);
   
   const restartGame = useCallback(() => {
     setGameState(null);
-    setShowSetup(true);
+    setCurrentScreen('main-menu');
     setGameOver(null);
+  }, []);
+  
+  const startCampaign = useCallback(() => {
+    const manager = new CampaignManager('My Company');
+    
+    // Give starting mechs
+    const startingMechs = [
+      availableUnits.find(u => u.name.includes('Centurion')),
+      availableUnits.find(u => u.name.includes('Hunchback')),
+      availableUnits.find(u => u.name.includes('Locust'))
+    ].filter(Boolean) as Unit[];
+    
+    startingMechs.forEach(mech => {
+      manager.addMech(cloneUnit(mech), 100);
+    });
+    
+    setCampaignManager(manager);
+    setCurrentScreen('campaign');
+  }, [availableUnits]);
+  
+  const startMission = useCallback((contract: Contract) => {
+    setCurrentContract(contract);
+    setGameMode('campaign');
+    setCurrentScreen('setup');
   }, []);
   
   useEffect(() => {
@@ -247,7 +282,108 @@ function App() {
     setGameState(newState);
   }, [gameState]);
   
-  if (showSetup) {
+  // Main Menu Screen
+  if (currentScreen === 'main-menu') {
+    return (
+      <div className="min-h-screen bg-gray-950 text-white p-8">
+        <div className="max-w-4xl mx-auto">
+          <header className="text-center mb-12">
+            <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-400 via-red-400 to-yellow-400 bg-clip-text text-transparent">
+              BattleTech Tactical Simulator
+            </h1>
+            <p className="text-gray-400 text-lg">Comprehensive Combat Simulator</p>
+            <p className="text-sm text-gray-500 mt-2">29 Units | Advanced Rules | Multiplayer | Campaign</p>
+          </header>
+          
+          <div className="grid md:grid-cols-2 gap-6 mb-8">
+            <button
+              onClick={() => {
+                setGameMode('singleplayer');
+                setCurrentScreen('setup');
+              }}
+              className="bg-gradient-to-br from-blue-900 to-blue-700 hover:from-blue-800 hover:to-blue-600 border-2 border-blue-500 rounded-lg p-8 text-left transition-all hover:scale-105"
+              data-testid="mode-quickbattle"
+            >
+              <Swords className="w-12 h-12 mb-4 text-blue-300" />
+              <h2 className="text-2xl font-bold mb-2">Quick Battle</h2>
+              <p className="text-gray-300">Single-player tactical combat vs AI</p>
+            </button>
+            
+            <button
+              onClick={startCampaign}
+              className="bg-gradient-to-br from-yellow-900 to-yellow-700 hover:from-yellow-800 hover:to-yellow-600 border-2 border-yellow-500 rounded-lg p-8 text-left transition-all hover:scale-105"
+              data-testid="mode-campaign"
+            >
+              <Trophy className="w-12 h-12 mb-4 text-yellow-300" />
+              <h2 className="text-2xl font-bold mb-2">Campaign</h2>
+              <p className="text-gray-300">Mercenary company management & progression</p>
+            </button>
+            
+            <button
+              onClick={() => setCurrentScreen('multiplayer-lobby')}
+              className="bg-gradient-to-br from-green-900 to-green-700 hover:from-green-800 hover:to-green-600 border-2 border-green-500 rounded-lg p-8 text-left transition-all hover:scale-105"
+              data-testid="mode-multiplayer"
+            >
+              <Gamepad2 className="w-12 h-12 mb-4 text-green-300" />
+              <h2 className="text-2xl font-bold mb-2">Multiplayer</h2>
+              <p className="text-gray-300">Hot-seat or network play vs human</p>
+            </button>
+            
+            <button
+              onClick={() => {
+                setSavedGames(getSaveList());
+                setShowLoadDialog(true);
+              }}
+              className="bg-gradient-to-br from-purple-900 to-purple-700 hover:from-purple-800 hover:to-purple-600 border-2 border-purple-500 rounded-lg p-8 text-left transition-all hover:scale-105"
+              data-testid="mode-loadgame"
+            >
+              <FolderOpen className="w-12 h-12 mb-4 text-purple-300" />
+              <h2 className="text-2xl font-bold mb-2">Load Game</h2>
+              <p className="text-gray-300">Continue a saved battle</p>
+            </button>
+          </div>
+          
+          <div className="bg-gray-900 border border-gray-700 rounded-lg p-6">
+            <h3 className="text-lg font-bold mb-3 text-blue-400">Latest Features</h3>
+            <ul className="text-sm text-gray-400 space-y-1">
+              <li>• 24 BattleMechs + 5 Combat Vehicles</li>
+              <li>• Campaign Mode with salvage & pilot progression</li>
+              <li>• Hot-seat & Network multiplayer</li>
+              <li>• Physical attacks (Punch, Kick, Charge, DFA)</li>
+              <li>• Advanced combat rules & elevation</li>
+              <li>• Save/Load system with keyboard shortcuts</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Campaign Screen
+  if (currentScreen === 'campaign' && campaignManager) {
+    return (
+      <CampaignScreen
+        campaignManager={campaignManager}
+        onStartMission={startMission}
+        onBack={() => setCurrentScreen('main-menu')}
+      />
+    );
+  }
+  
+  // Multiplayer Lobby
+  if (currentScreen === 'multiplayer-lobby') {
+    return (
+      <MultiplayerLobby
+        onStartGame={(mode, config) => {
+          setGameMode(mode === 'hotseat' ? 'hotseat' : 'network');
+          setCurrentScreen('setup');
+        }}
+        onBack={() => setCurrentScreen('main-menu')}
+      />
+    );
+  }
+  
+  if (currentScreen === 'setup') {
     const lightMechs = availableUnits.filter(u => u.tonnage < 40);
     const mediumMechs = availableUnits.filter(u => u.tonnage >= 40 && u.tonnage < 60);
     const heavyMechs = availableUnits.filter(u => u.tonnage >= 60 && u.tonnage < 80);
@@ -413,12 +549,11 @@ function App() {
     );
   }
   
-  if (!gameState) return null;
+  if (currentScreen === 'game' && gameState) {
+    const playerUnits = gameState.units.filter((_, i) => i < gameState.units.length / 2);
+    const aiUnits = gameState.units.filter((_, i) => i >= gameState.units.length / 2);
   
-  const playerUnits = gameState.units.filter((_, i) => i < gameState.units.length / 2);
-  const aiUnits = gameState.units.filter((_, i) => i >= gameState.units.length / 2);
-  
-  return (
+    return (
     <div className="min-h-screen bg-gray-950 text-white p-4">
       <div className="max-w-7xl mx-auto">
         <header className="flex items-center justify-between mb-4">
@@ -636,6 +771,10 @@ function App() {
       </Dialog>
     </div>
   );
+  }
+  
+  // Fallback
+  return null;
 }
 
 export default App;

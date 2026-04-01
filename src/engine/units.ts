@@ -452,7 +452,33 @@ import {
   createKingCrab
 } from './additional-units';
 
-// Get all available units
+// Import medium/heavy mechs
+import {
+  createShadowhawk,
+  createGriffin,
+  createPhoenixHawk,
+  createTrebuchet
+} from './mechs-medium-advanced';
+
+// Import heavy mechs and clan mechs
+import {
+  createThunderbolt,
+  createOrion,
+  createStormcrow,
+  createMadDog,
+  createWarhawk
+} from './mechs-heavy-clan';
+
+// Import vehicles
+import {
+  createScorpion,
+  createVedette,
+  createRommel,
+  createDemolisher,
+  createStriker
+} from './vehicles';
+
+// Get all available units (Mechs + Vehicles)
 export function getAllUnits(): Unit[] {
   return [
     // Light Mechs (20-35 tons)
@@ -463,20 +489,50 @@ export function getAllUnits(): Unit[] {
     
     // Medium Mechs (40-55 tons)
     createHunchback(),
+    createShadowhawk(),
+    createGriffin(),
+    createPhoenixHawk(),
+    createTrebuchet(),
     createCenturion(),
     createWolverine(),
     
     // Heavy Mechs (60-75 tons)
     createWarhammer(),
+    createThunderbolt(),
     createCatapult(),
+    createOrion(),
     createMarauder(),
     createTimberWolf(),
+    
+    // Clan Mechs
+    createStormcrow(),
+    createMadDog(),
+    createWarhawk(),
     
     // Assault Mechs (80-100 tons)
     createAwesome(),
     createStalker(),
     createAtlasD(),
     createKingCrab()
+  ];
+}
+
+// Get vehicles only
+export function getAllVehicles(): Unit[] {
+  return [
+    createScorpion(),
+    createStriker(),
+    createVedette(),
+    createRommel(),
+    createDemolisher()
+  ];
+}
+
+// Get all units including vehicles
+export function getAllUnitsAndVehicles(): Unit[] {
+  return [
+    ...getAllUnits(),
+    ...getAllVehicles()
   ];
 }
 
