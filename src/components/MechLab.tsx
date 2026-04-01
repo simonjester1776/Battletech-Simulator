@@ -1,14 +1,15 @@
 // Mech Lab - Custom Mech Builder
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { Unit } from '@/types/battletech';
-import { WEAPON_DATABASE } from '@/lib/weapon-database';
+import { WEAPON_DATABASE, type WeaponData } from '@/lib/weapon-database';
 import { getAllUnitsAndVehicles } from '@/engine/units';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { Wrench, Plus, Trash2, Save, Download } from 'lucide-react';
+import { Wrench, Plus, Trash2, Save, Download, ArrowLeft } from 'lucide-react';
 
 interface MechLabProps {
   onSave: (customizedMech: Unit) => void;
@@ -24,18 +25,6 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
   const [selectedWeapons, setSelectedWeapons] = useState<string[]>(
     baseMech.weapons.map(w => w.name)
   );
-  const [selectedLocation, setSelectedLocation] = useState<string>('CT');
-  const [techBase, setTechBase] = useState<'IS' | 'CLAN' | 'ALL'>('ALL');
-  const [filterType, setFilterType] = useState<string>('all');
-  
-  // Update when unit changes
-  useEffect(() => {
-    if (baseMech) {
-      setMechName(baseMech.name);
-      setSelectedWeapons(baseMech.weapons.map(w => w.name));
-    }
-  }, [selectedUnitId, baseMech]);
-  
   const [selectedLocation, setSelectedLocation] = useState<string>('CT');
   const [techBase, setTechBase] = useState<'IS' | 'CLAN' | 'ALL'>('ALL');
   const [filterType, setFilterType] = useState<string>('all');
@@ -116,12 +105,12 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm text-gray-400 mb-2">Select Chassis</label>
-                <Select value={selectedUnitId} onValueChange={setSelectedUnitId}>
+                <Select value={selectedUnitId} onValueChange={handleChassisChange}>
                   <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-gray-800 border-gray-700 text-white max-h-96">
-                    <div className="px-2 py-1.5 text-xs font-semibold text-orange-400">BATTLEMECHS</div>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-blue-400">BATTLEMECHS</div>
                     {allUnits.filter(u => u.unitType === 'Mech').map(unit => (
                       <SelectItem key={unit.id} value={unit.id} className="text-white">
                         {unit.name} ({unit.tonnage}t)
@@ -130,7 +119,7 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
                     
                     {allUnits.some(u => u.unitType === 'Vehicle') && (
                       <>
-                        <div className="px-2 py-1.5 text-xs font-semibold text-orange-400 mt-2">COMBAT VEHICLES</div>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-blue-400 mt-2">COMBAT VEHICLES</div>
                         {allUnits.filter(u => u.unitType === 'Vehicle').map(unit => (
                           <SelectItem key={unit.id} value={unit.id} className="text-white">
                             {unit.name} ({unit.tonnage}t)
@@ -141,7 +130,7 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
                     
                     {allUnits.some(u => u.unitType === 'BattleArmor') && (
                       <>
-                        <div className="px-2 py-1.5 text-xs font-semibold text-orange-400 mt-2">BATTLE ARMOR</div>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-blue-400 mt-2">BATTLE ARMOR</div>
                         {allUnits.filter(u => u.unitType === 'BattleArmor').map(unit => (
                           <SelectItem key={unit.id} value={unit.id} className="text-white">
                             {unit.name}
