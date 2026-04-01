@@ -2,7 +2,7 @@
 ## BattleTech Tactical Simulator v2.0
 
 **Last Updated:** April 1, 2026  
-**Version:** 2.0.0  
+**Version:** 2.1.1  
 **Status:** ✅ Production Ready
 
 ---
@@ -74,29 +74,27 @@ Create a feature-rich, accessible BattleTech simulator that rivals professional 
 - Mission objectives overlay
 
 ### 3. Unit Roster ✅
-**Status:** Complete (60+ units)
+**Status:** Complete (34 units available)
 
-**BattleMechs:**
-- Light (10+ variants)
-- Medium (12+ variants)
-- Heavy (10+ variants)
-- Assault (8+ variants)
-- Inner Sphere & Clan variants
+**BattleMechs (23 variants):**
+- Light: Locust, Commando, Urbanmech, Jenner (4)
+- Medium: Hunchback, Shadowhawk, Griffin, Phoenix Hawk, Trebuchet, Centurion, Wolverine (7)
+- Heavy: Warhammer, Thunderbolt, Catapult, Orion, Marauder, Timber Wolf (6)
+- Clan: Stormcrow, Mad Dog, Warhawk (3)
+- Assault: Awesome, Stalker, Atlas, King Crab (4)
 
-**Combat Vehicles:**
-- Light: Scorpion Tank
-- Medium: Vedette Tank
-- Heavy: Manticore Tank
+**Combat Vehicles (5 variants):**
+- Scorpion, Striker, Vedette, Rommel, Demolisher
 
-**Battle Armor:**
-- Elemental Suit (Clan)
-- Inner Sphere Standard
+**Battle Armor (6 variants):**
+- Standard, Elemental, Salamander, Longinus, Sylph, Infiltrator
 
-**Aerospace Fighters (NEW):**
+**Aerospace Fighters (7 variants - Mechanics Ready):**
 - Light: Sparrowhawk, Chippewa
 - Medium: Shilone, Lucifer
 - Heavy: Thunderbird, Corsair
 - Clan: Visigoth
+- **Status:** Air combat mechanics implemented, UI integration pending
 
 ### 4. Mission Objectives System ✅
 **Status:** Implemented (UI complete, game integration pending)
@@ -117,7 +115,25 @@ Create a feature-rich, accessible BattleTech simulator that rivals professional 
 - In-battle overlay display
 - Mission summary screen
 
-### 5. Combat System ✅
+### 5. Mech Lab ✅
+**Status:** Fully Functional (v2.0.1)
+
+**Features:**
+- Chassis selector with all 34 units (Mechs, Vehicles, Battle Armor)
+- Real-time weapon customization
+- Tonnage and critical slot tracking
+- Heat management calculator
+- Tech base filtering (Inner Sphere, Clan, Both)
+- Weapon type filtering
+- Cost estimation
+- Save/Export custom designs
+
+**Recent Fix (v2.1.1):**
+- Fixed chassis selector crash
+- Implemented proper state management for chassis changes
+- Weapon loadouts now reset correctly when changing chassis
+
+### 6. Combat System ✅
 **Status:** Complete
 
 **Phases:**
@@ -136,7 +152,26 @@ Create a feature-rich, accessible BattleTech simulator that rivals professional 
 - Physical attacks (punch, kick)
 - Weapon ranges
 
-### 6. Campaign Mode ✅
+### 6. Combat System ✅
+**Status:** Complete
+
+**Phases:**
+- Initiative (roll for turn order)
+- Movement (walk/run/jump)
+- Combat (weapon fire)
+- Heat (heat management)
+
+**Mechanics:**
+- Hex-grid positioning
+- Line of sight calculations
+- To-hit modifiers
+- Armor damage tracking
+- Critical hits
+- Heat buildup
+- Physical attacks (punch, kick)
+- Weapon ranges
+
+### 7. Campaign Mode ✅
 **Status:** Complete (objectives integration pending)
 
 **Features:**
@@ -147,16 +182,6 @@ Create a feature-rich, accessible BattleTech simulator that rivals professional 
 - Pilot management
 - Salvage system
 - Reputation tracking
-
-### 7. Mech Lab ✅
-**Status:** Complete
-
-**Features:**
-- Custom mech configurations
-- Weapon loadout editor
-- Tonnage calculator
-- Heat efficiency analysis
-- Save custom designs
 
 ---
 

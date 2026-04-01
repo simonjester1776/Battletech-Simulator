@@ -2,6 +2,46 @@
 
 All notable changes to the BattleTech Tactical Simulator project.
 
+## [2.1.1] - 2026-04-01
+
+### 🐛 Critical Bug Fix
+
+#### MechLab Chassis Selector
+- **FIXED**: Runtime crash `handleChassisChange is not defined` in MechLab.tsx
+- Implemented missing chassis change handler function
+- Users can now select from all 34 available units (23 Mechs, 5 Vehicles, 6 Battle Armor)
+- Chassis selector dropdown fully functional with proper state management
+- Weapon loadouts now reset correctly when changing chassis
+- Stats (tonnage, heat, cost) recalculate on chassis change
+
+### ✅ Testing
+- Comprehensive app stability verification completed
+- All game modes tested and working (Single Player, Campaign, Local Hotseat, Online Multiplayer)
+- Navigation between screens verified
+- No runtime errors in console logs
+
+---
+
+## [2.1.0] - 2026-04-01
+
+### 🎮 Save Management Features
+
+#### Settings Menu & Save Management
+- Added Settings dialog in battle screen
+- Save statistics display (total saves, storage used)
+- Delete individual saves with trash icon
+- Reset current game functionality
+- Delete all saves (wipe data) with confirmation
+- Safety confirmations for all destructive actions
+- Visual warnings (yellow for reset, red for delete)
+- Disabled states when no saves exist
+
+### 📝 Documentation
+- Created `/app/SAVE_MANAGEMENT.md` guide
+- Updated user documentation
+
+---
+
 ## [2.0.0] - 2026-04-01
 
 ### 🚀 Major Features
@@ -201,6 +241,8 @@ All notable changes to the BattleTech Tactical Simulator project.
 ## Upcoming Features
 
 ### High Priority
+- [x] MechLab chassis selector (COMPLETED v2.1.1)
+- [x] Save management system (COMPLETED v2.1.0)
 - [ ] Complete aerospace fighter UI integration
 - [ ] Live mission objective progress tracking
 - [ ] Multiplayer game state synchronization

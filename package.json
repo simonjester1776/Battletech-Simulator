@@ -1,7 +1,7 @@
 {
   "name": "battletech-tactical-simulator",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Full-stack BattleTech tactical combat simulator with online multiplayer, campaign mode, and mission objectives",
   "type": "module",
   "scripts": {

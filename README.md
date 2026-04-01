@@ -2,7 +2,7 @@
 
 A comprehensive, full-stack BattleTech tactical combat simulator with real-time multiplayer, campaign mode, and advanced combat mechanics.
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.1.1-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![React](https://img.shields.io/badge/React-18.3.1-61dafb.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.5.3-3178c6.svg)
@@ -15,10 +15,10 @@ A comprehensive, full-stack BattleTech tactical combat simulator with real-time 
 ### Core Gameplay
 - **Hex-based Tactical Combat** - Classic BattleTech tabletop rules
 - **Turn-based Strategy** - Movement, combat, and heat management phases
-- **40+ Unit Variants** - Mechs, Vehicles, Battle Armor, and Aerospace Fighters
+- **34 Unit Variants** - 23 Mechs, 5 Vehicles, 6 Battle Armor suits
 - **Advanced Combat** - Armor damage, heat sinks, weapon systems, physical attacks
 - **Campaign Mode** - Build your mercenary company with progression
-- **Mech Lab** - Customize and configure your units
+- **Mech Lab** - Customize and configure your units with full chassis selector
 
 ### Multiplayer (NEW!)
 - **Online Multiplayer** - Real-time networked play via WebSocket
@@ -34,9 +34,11 @@ A comprehensive, full-stack BattleTech tactical combat simulator with real-time 
 
 ### Unit Types
 - **BattleMechs** - Light, Medium, Heavy, Assault (Inner Sphere & Clan)
-- **Combat Vehicles** - Armor, hover, and tracked units
-- **Battle Armor** - Infantry in powered suits
-- **Aerospace Fighters (NEW!)** - 7 fighter variants with altitude-based combat
+  - 23 fully functional variants
+  - Chassis selector in Mech Lab
+- **Combat Vehicles** - 5 armored combat vehicles
+- **Battle Armor** - 6 infantry suits with powered armor
+- **Aerospace Fighters (Coming Soon)** - Air combat mechanics implemented, UI integration pending
 
 ---
 
@@ -330,23 +332,43 @@ uvicorn server:app --host 0.0.0.0 --port 8001 --workers 4
 
 ## 📊 Unit Roster
 
-### BattleMechs (40+ variants)
-- **Light:** Locust, Jenner, Commando, Raven, Kit Fox
-- **Medium:** Hunchback, Centurion, Griffin, Wolverine, Shadow Cat
-- **Heavy:** Warhammer, Marauder, Archer, Thunderbolt, Timber Wolf
-- **Assault:** Atlas, Awesome, Stalker, Zeus, Dire Wolf
+### BattleMechs (23 variants)
+**Light (20-35 tons):**
+- Locust LCT-1V, Commando COM-2D, Urbanmech UM-R60, Jenner JR7-D
 
-### Combat Vehicles
-- Scorpion Light Tank, Vedette Medium Tank, Manticore Heavy Tank
+**Medium (40-55 tons):**
+- Hunchback HBK-4G, Shadowhawk SHD-2H, Griffin GRF-1N
+- Phoenix Hawk PXH-1, Trebuchet TBT-5N, Centurion CN9-A, Wolverine WVR-6R
 
-### Battle Armor
-- Elemental Suit, Inner Sphere Standard
+**Heavy (60-75 tons):**
+- Warhammer WHM-6R, Thunderbolt TDR-5S, Catapult CPLT-C1
+- Orion ON1-K, Marauder MAD-3R, Timber Wolf (Clan)
+- Stormcrow (Clan), Mad Dog (Clan), Warhawk (Clan)
 
-### Aerospace Fighters (NEW!)
-- **Light:** Sparrowhawk, Chippewa
-- **Medium:** Shilone, Lucifer
-- **Heavy:** Thunderbird, Corsair
-- **Clan:** Visigoth
+**Assault (80-100 tons):**
+- Awesome AWS-8Q, Stalker STK-3F, Atlas AS7-D, King Crab KGC-000
+
+### Combat Vehicles (5 variants)
+- Scorpion Light Tank (25t)
+- Striker Light Tank (35t)
+- Vedette Medium Tank (50t)
+- Rommel Tank (65t)
+- Demolisher Heavy Tank (80t)
+
+### Battle Armor (6 variants)
+- Standard Battle Armor (IS)
+- Elemental Suit (Clan)
+- Salamander Suit
+- Longinus Suit
+- Sylph Battle Armor
+- Infiltrator Suit
+
+### Aerospace Fighters (7 variants - In Development)
+**Note:** Mechanics implemented, UI integration pending
+- **Light:** Sparrowhawk (30t), Chippewa (25t)
+- **Medium:** Shilone (50t), Lucifer (45t)
+- **Heavy:** Thunderbird (60t), Corsair (50t)
+- **Clan:** Visigoth (60t)
 
 ---
 
@@ -470,14 +492,15 @@ MIT License - See LICENSE file for details
 ### Completed ✅
 - [x] Code refactoring and modularization
 - [x] Online multiplayer infrastructure
-- [x] Aerospace fighter units
 - [x] Mission objectives system
 - [x] Error boundaries
 - [x] Keyboard shortcuts
+- [x] MechLab chassis selector fix
+- [x] Save management system
 
 ### In Progress ⏳
-- [ ] Aerospace UI integration
-- [ ] Live objective tracking
+- [ ] Aerospace fighter UI integration
+- [ ] Live objective tracking in battle
 - [ ] Multiplayer game state sync
 
 ### Future Plans 📝
@@ -492,10 +515,22 @@ MIT License - See LICENSE file for details
 
 ## 📈 Version History
 
-### v2.0.0 (Current)
+### v2.1.1 (Current)
+- 🐛 **FIXED**: MechLab chassis selector crash (`handleChassisChange is not defined`)
+- ✅ All 34 units now selectable in Mech Lab (23 Mechs, 5 Vehicles, 6 Battle Armor)
+- ✅ Chassis change properly resets weapon loadouts and stats
+- ✅ Comprehensive stability testing completed across all game modes
+
+### v2.1.0
+- 🎮 Added save management system (Settings dialog, save stats, delete saves, wipe data)
+- ✨ Reset current game functionality
+- 🛡️ Safety confirmations for destructive actions
+- 📝 Created SAVE_MANAGEMENT.md documentation
+
+### v2.0.0
 - ✨ Added online multiplayer with WebSocket
-- ✨ Added 7 aerospace fighter variants
 - ✨ Added mission objectives system (6 types)
+- ✨ Added 7 aerospace fighter variants (mechanics ready, UI pending)
 - 🔨 Refactored App.tsx (816 → 280 lines)
 - 🎨 Created modular screen components
 - 🛡️ Added production error boundaries
