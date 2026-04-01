@@ -21,6 +21,7 @@ import { getAllUnitsAndVehicles, cloneUnit } from '@/engine/units';
 import { CampaignManager } from '@/lib/campaign';
 import type { Contract } from '@/lib/campaign';
 import type { GameMode } from '@/lib/multiplayer';
+import { generateEliminationMission, type MissionObjective } from '@/lib/mission-objectives';
 
 import { MainMenu } from '@/screens/MainMenu';
 import { UnitSetup } from '@/screens/UnitSetup';
@@ -45,6 +46,10 @@ function App() {
   
   const [playerSelections, setPlayerSelections] = useState<string[]>(['atlas', 'warhammer', 'hunchback']);
   const [aiSelections, setAiSelections] = useState<string[]>(['timber-wolf', 'marauder']);
+  
+  const [missionObjectives] = useState<MissionObjective[]>([
+    generateEliminationMission()
+  ]);
   
   const availableUnits = getAllUnitsAndVehicles();
   
@@ -301,6 +306,7 @@ function App() {
         onAIturn={handleAIturn}
         onBack={() => setCurrentScreen('main-menu')}
         gameOver={gameOver}
+        objectives={missionObjectives}
       />
     );
   }

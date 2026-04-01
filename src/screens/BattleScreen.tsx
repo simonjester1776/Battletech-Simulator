@@ -5,12 +5,14 @@ import { HexGrid } from '@/components/HexGrid';
 import { UnitPanel } from '@/components/UnitPanel';
 import { GameLog } from '@/components/GameLog';
 import { ControlPanel } from '@/components/ControlPanel';
+import { ObjectivesOverlay } from '@/components/ObjectivesOverlay';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Save, FolderOpen, Download } from 'lucide-react';
 import { saveGame, loadGame, getSaveList, exportGameAsFile } from '@/lib/save-system';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import type { MissionObjective } from '@/lib/mission-objectives';
 
 interface BattleScreenProps {
   gameState: GameState;
@@ -26,6 +28,7 @@ interface BattleScreenProps {
   onAIturn: () => void;
   onBack: () => void;
   gameOver: { gameOver: boolean; winner: 'player' | 'ai' | 'draw' | null } | null;
+  objectives?: MissionObjective[];
 }
 
 export function BattleScreen({
@@ -42,6 +45,7 @@ export function BattleScreen({
   onAIturn,
   onBack,
   gameOver,
+  objectives,
 }: BattleScreenProps) {
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
@@ -145,7 +149,7 @@ export function BattleScreen({
         
         {/* Main Game Area */}
         <div className="grid lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 space-y-4">
             <HexGrid
               hexes={gameState.hexGrid}
               selectedUnit={gameState.selectedUnit}
@@ -153,6 +157,10 @@ export function BattleScreen({
               validTargetHexes={gameState.validTargetHexes}
               onHexClick={onHexClick}
             />
+            
+            {objectives && objectives.length > 0 && (
+              <ObjectivesOverlay objectives={objectives} />
+            )}
           </div>
           
           <div className="space-y-4">
