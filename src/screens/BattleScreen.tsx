@@ -7,10 +7,11 @@ import { GameLog } from '@/components/GameLog';
 import { ControlPanel } from '@/components/ControlPanel';
 import { ObjectivesOverlay } from '@/components/ObjectivesOverlay';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Save, FolderOpen, Download } from 'lucide-react';
-import { saveGame, loadGame, getSaveList, exportGameAsFile } from '@/lib/save-system';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ArrowLeft, Save, FolderOpen, Download, Trash2, AlertTriangle, Settings } from 'lucide-react';
+import { saveGame, loadGame, getSaveList, exportGameAsFile, deleteSave, deleteAllSaves, getSaveStats } from '@/lib/save-system';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import type { MissionObjective } from '@/lib/mission-objectives';
 
@@ -49,8 +50,11 @@ export function BattleScreen({
 }: BattleScreenProps) {
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [showWipeConfirm, setShowWipeConfirm] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [savedGames, setSavedGames] = useState<Array<{ id: string; name: string; timestamp: number }>>([]);
+  const [saveStats, setSaveStats] = useState({ totalSaves: 0, totalSize: 0 });
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
@@ -79,6 +83,41 @@ export function BattleScreen({
       onGameStateChange(loaded);
       setShowLoadDialog(false);
     }
+  };
+
+  const handleDeleteSave = (saveId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (confirm('Delete this save?')) {
+      deleteSave(saveId);
+      setSavedGames(getSaveList());
+      setSaveStats(getSaveStats());
+    }
+  };
+
+  const handleWipeAllSaves = () => {
+    if (deleteAllSaves()) {
+      setSavedGames([]);
+      setSaveStats({ totalSaves: 0, totalSize: 0 });
+      setShowWipeConfirm(false);
+      setShowSettingsDialog(false);
+      alert('All saves have been deleted');
+    } else {
+      alert('Failed to delete saves');
+    }
+  };
+
+  const handleResetGame = () => {
+    if (confirm('Reset current game? This will return to the main menu.')) {
+      onRestart();
+    }
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
   const playerUnits = gameState.units.filter((_, i) => i < gameState.units.length / 2);
@@ -127,6 +166,7 @@ export function BattleScreen({
               onClick={() => {
                 setShowLoadDialog(true);
                 setSavedGames(getSaveList());
+                setSaveStats(getSaveStats());
               }}
               variant="outline"
               className="border-gray-700"
@@ -143,6 +183,18 @@ export function BattleScreen({
             >
               <Download className="w-4 h-4 mr-2" />
               Export
+            </Button>
+            <Button
+              onClick={() => {
+                setSaveStats(getSaveStats());
+                setShowSettingsDialog(true);
+              }}
+              variant="outline"
+              className="border-gray-700"
+              size="sm"
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Settings
             </Button>
           </div>
         </div>
@@ -276,18 +328,126 @@ export function BattleScreen({
               savedGames.map((save) => (
                 <div
                   key={save.id}
-                  className="p-3 bg-gray-800 rounded border border-gray-700 hover:border-blue-500 cursor-pointer"
-                  onClick={() => handleLoadGame(save.id)}
+                  className="p-3 bg-gray-800 rounded border border-gray-700 hover:border-blue-500 cursor-pointer flex justify-between items-center group"
                   data-testid={`load-save-${save.id}`}
                 >
-                  <p className="font-medium">{save.name}</p>
-                  <p className="text-xs text-gray-400">
-                    {new Date(save.timestamp).toLocaleString()}
-                  </p>
+                  <div onClick={() => handleLoadGame(save.id)} className="flex-1">
+                    <p className="font-medium">{save.name}</p>
+                    <p className="text-xs text-gray-400">
+                      {new Date(save.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-400 hover:bg-red-950"
+                    onClick={(e) => handleDeleteSave(save.id, e)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
               ))
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Settings Dialog */}
+      <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
+        <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle>Game Settings</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Manage your game data
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Save Statistics */}
+            <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
+              <h3 className="font-semibold mb-2">Save Data Statistics</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Total Saves:</span>
+                  <span className="font-medium">{saveStats.totalSaves}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Storage Used:</span>
+                  <span className="font-medium">{formatBytes(saveStats.totalSize)}</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Actions */}
+            <div className="space-y-2">
+              <Button
+                onClick={handleResetGame}
+                variant="outline"
+                className="w-full border-yellow-600 text-yellow-500 hover:bg-yellow-950"
+              >
+                <AlertTriangle className="w-4 h-4 mr-2" />
+                Reset Current Game
+              </Button>
+              
+              <Button
+                onClick={() => setShowWipeConfirm(true)}
+                variant="outline"
+                className="w-full border-red-600 text-red-500 hover:bg-red-950"
+                disabled={saveStats.totalSaves === 0}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete All Saves ({saveStats.totalSaves})
+              </Button>
+            </div>
+            
+            {saveStats.totalSaves === 0 && (
+              <Alert className="bg-blue-900/20 border-blue-500/20">
+                <AlertDescription className="text-blue-400 text-sm">
+                  No saved games to delete
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Wipe Confirmation Dialog */}
+      <Dialog open={showWipeConfirm} onOpenChange={setShowWipeConfirm}>
+        <DialogContent className="bg-gray-900 border-red-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-red-500 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              Delete All Saves?
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              This action cannot be undone!
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Alert className="bg-red-900/20 border-red-500/20">
+            <AlertTriangle className="w-4 h-4 text-red-500" />
+            <AlertDescription className="text-red-400">
+              You are about to permanently delete {saveStats.totalSaves} saved game{saveStats.totalSaves !== 1 ? 's' : ''}.
+              This will free up {formatBytes(saveStats.totalSize)} of storage.
+            </AlertDescription>
+          </Alert>
+          
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowWipeConfirm(false)}
+              className="border-gray-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleWipeAllSaves}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete All Saves
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

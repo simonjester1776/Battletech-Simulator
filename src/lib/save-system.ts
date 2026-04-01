@@ -144,3 +144,46 @@ export function importGameFromFile(file: File): Promise<GameState> {
     reader.readAsText(file);
   });
 }
+
+// Delete all saved games
+export function deleteAllSaves(): boolean {
+  try {
+    const saveList = getSaveList();
+    
+    // Remove each save from localStorage
+    saveList.forEach(save => {
+      localStorage.removeItem(save.id);
+    });
+    
+    // Clear the save list
+    localStorage.removeItem(SAVE_LIST_KEY);
+    
+    return true;
+  } catch (error) {
+    console.error('Failed to delete all saves:', error);
+    return false;
+  }
+}
+
+// Get save statistics
+export function getSaveStats(): { totalSaves: number; totalSize: number } {
+  try {
+    const saveList = getSaveList();
+    let totalSize = 0;
+    
+    saveList.forEach(save => {
+      const data = localStorage.getItem(save.id);
+      if (data) {
+        totalSize += new Blob([data]).size;
+      }
+    });
+    
+    return {
+      totalSaves: saveList.length,
+      totalSize, // Size in bytes
+    };
+  } catch (error) {
+    console.error('Failed to get save stats:', error);
+    return { totalSaves: 0, totalSize: 0 };
+  }
+}
