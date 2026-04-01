@@ -42,7 +42,6 @@ function App() {
   
   const [campaignManager, setCampaignManager] = useState<CampaignManager | null>(null);
   const [currentContract] = useState<Contract | null>(null);
-  const [mechLabMech, setMechLabMech] = useState<Unit | null>(null);
   
   const [playerSelections, setPlayerSelections] = useState<string[]>(['atlas', 'warhammer', 'hunchback']);
   const [aiSelections, setAiSelections] = useState<string[]>(['timber-wolf', 'marauder']);
@@ -222,7 +221,6 @@ function App() {
           setCurrentScreen('network-lobby');
         }}
         onMechLab={() => {
-          setMechLabMech(availableUnits[0]);
           setCurrentScreen('mech-lab');
         }}
       />
@@ -263,10 +261,9 @@ function App() {
     );
   }
   
-  if (currentScreen === 'mech-lab' && mechLabMech) {
+  if (currentScreen === 'mech-lab') {
     return (
       <MechLab
-        baseMech={mechLabMech}
         onSave={(customMech) => {
           console.log('Saved custom mech:', customMech);
           setCurrentScreen('main-menu');
