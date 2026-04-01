@@ -478,6 +478,16 @@ import {
   createStriker
 } from './vehicles';
 
+// Import battle armor
+import {
+  createElemental,
+  createStandardBA,
+  createSalamander,
+  createLonginus,
+  createSylph,
+  createInfiltrator
+} from './battle-armor';
+
 // Get all available units (Mechs + Vehicles)
 export function getAllUnits(): Unit[] {
   return [
@@ -528,11 +538,24 @@ export function getAllVehicles(): Unit[] {
   ];
 }
 
-// Get all units including vehicles
+// Get battle armor only
+export function getAllBattleArmor(): Unit[] {
+  return [
+    createStandardBA(),
+    createElemental(),
+    createSalamander(),
+    createLonginus(),
+    createSylph(),
+    createInfiltrator()
+  ];
+}
+
+// Get all units including vehicles and battle armor
 export function getAllUnitsAndVehicles(): Unit[] {
   return [
     ...getAllUnits(),
-    ...getAllVehicles()
+    ...getAllVehicles(),
+    ...getAllBattleArmor()
   ];
 }
 

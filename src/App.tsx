@@ -30,6 +30,7 @@ import { GameLog } from '@/components/GameLog';
 import { ControlPanel } from '@/components/ControlPanel';
 import { CampaignScreen } from '@/components/CampaignScreen';
 import { MultiplayerLobby } from '@/components/MultiplayerLobby';
+import { MechLab } from '@/components/MechLab';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -37,7 +38,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { Swords, Users, BookOpen, Save, FolderOpen, Download, Gamepad2, Trophy } from 'lucide-react';
 
-type AppScreen = 'main-menu' | 'setup' | 'game' | 'campaign' | 'multiplayer-lobby';
+type AppScreen = 'main-menu' | 'setup' | 'game' | 'campaign' | 'multiplayer-lobby' | 'mech-lab';
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('main-menu');
@@ -51,6 +52,7 @@ function App() {
   
   const [campaignManager, setCampaignManager] = useState<CampaignManager | null>(null);
   const [currentContract, setCurrentContract] = useState<Contract | null>(null);
+  const [mechLabMech, setMechLabMech] = useState<Unit | null>(null);
   
   const [playerSelections, setPlayerSelections] = useState<string[]>(['atlas', 'warhammer', 'hunchback']);
   const [aiSelections, setAiSelections] = useState<string[]>(['timber-wolf', 'marauder']);
@@ -292,7 +294,7 @@ function App() {
               BattleTech Tactical Simulator
             </h1>
             <p className="text-gray-400 text-lg">Comprehensive Combat Simulator</p>
-            <p className="text-sm text-gray-500 mt-2">29 Units | Advanced Rules | Multiplayer | Campaign</p>
+            <p className="text-sm text-gray-500 mt-2">35 Units | Advanced Rules | Multiplayer | Campaign | Mech Lab</p>
           </header>
           
           <div className="grid md:grid-cols-2 gap-6 mb-8">
@@ -331,6 +333,23 @@ function App() {
             
             <button
               onClick={() => {
+                // Use first mech as base for customization
+                const baseMech = availableUnits.find(u => u.unitType === UnitType.MECH);
+                if (baseMech) {
+                  setMechLabMech(cloneUnit(baseMech));
+                  setCurrentScreen('mech-lab');
+                }
+              }}
+              className="bg-gradient-to-br from-orange-900 to-orange-700 hover:from-orange-800 hover:to-orange-600 border-2 border-orange-500 rounded-lg p-8 text-left transition-all hover:scale-105"
+              data-testid="mode-mechlab"
+            >
+              <BookOpen className="w-12 h-12 mb-4 text-orange-300" />
+              <h2 className="text-2xl font-bold mb-2">Mech Lab</h2>
+              <p className="text-gray-300">Custom mech builder & loadout designer</p>
+            </button>
+            
+            <button
+              onClick={() => {
                 setSavedGames(getSaveList());
                 setShowLoadDialog(true);
               }}
@@ -346,12 +365,12 @@ function App() {
           <div className="bg-gray-900 border border-gray-700 rounded-lg p-6">
             <h3 className="text-lg font-bold mb-3 text-blue-400">Latest Features</h3>
             <ul className="text-sm text-gray-400 space-y-1">
-              <li>• 24 BattleMechs + 5 Combat Vehicles</li>
+              <li>• 24 BattleMechs + 5 Combat Vehicles + 6 Battle Armor</li>
+              <li>• Physical Attacks: Punch, Kick, Charge, DFA</li>
+              <li>• Mech Lab with 50+ weapons database</li>
               <li>• Campaign Mode with salvage & pilot progression</li>
               <li>• Hot-seat & Network multiplayer</li>
-              <li>• Physical attacks (Punch, Kick, Charge, DFA)</li>
               <li>• Advanced combat rules & elevation</li>
-              <li>• Save/Load system with keyboard shortcuts</li>
             </ul>
           </div>
         </div>
@@ -383,11 +402,28 @@ function App() {
     );
   }
   
+  // Mech Lab Screen
+  if (currentScreen === 'mech-lab' && mechLabMech) {
+    return (
+      <MechLab
+        baseMech={mechLabMech}
+        onSave={(customMech) => {
+          // TODO: Add to available units or save to campaign
+          console.log('Saved custom mech:', customMech);
+          setCurrentScreen('main-menu');
+        }}
+        onCancel={() => setCurrentScreen('main-menu')}
+      />
+    );
+  }
+  
   if (currentScreen === 'setup') {
-    const lightMechs = availableUnits.filter(u => u.tonnage < 40);
-    const mediumMechs = availableUnits.filter(u => u.tonnage >= 40 && u.tonnage < 60);
-    const heavyMechs = availableUnits.filter(u => u.tonnage >= 60 && u.tonnage < 80);
-    const assaultMechs = availableUnits.filter(u => u.tonnage >= 80);
+    const lightMechs = availableUnits.filter(u => u.unitType === UnitType.MECH && u.tonnage < 40);
+    const mediumMechs = availableUnits.filter(u => u.unitType === UnitType.MECH && u.tonnage >= 40 && u.tonnage < 60);
+    const heavyMechs = availableUnits.filter(u => u.unitType === UnitType.MECH && u.tonnage >= 60 && u.tonnage < 80);
+    const assaultMechs = availableUnits.filter(u => u.unitType === UnitType.MECH && u.tonnage >= 80);
+    const vehicles = availableUnits.filter(u => u.unitType === UnitType.VEHICLE);
+    const battleArmor = availableUnits.filter(u => u.unitType === UnitType.BATTLE_ARMOR);
     
     return (
       <div className="min-h-screen bg-gray-950 text-white p-8">
@@ -418,7 +454,7 @@ function App() {
                   ].map(category => (
                     <div key={category.title}>
                       <p className="text-xs font-semibold text-gray-500 mb-1">{category.title}</p>
-                      {category.mechs.map(unit => {
+                      {category.units.map(unit => {
                         const key = unit.name.toLowerCase().split(' ')[0];
                         const isSelected = playerSelections.includes(key);
                         
@@ -469,7 +505,7 @@ function App() {
                   ].map(category => (
                     <div key={category.title}>
                       <p className="text-xs font-semibold text-gray-500 mb-1">{category.title}</p>
-                      {category.mechs.map(unit => {
+                      {category.units.map(unit => {
                         const key = unit.name.toLowerCase().split(' ')[0];
                         const isSelected = aiSelections.includes(key);
                         
