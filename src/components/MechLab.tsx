@@ -67,6 +67,16 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
     setSelectedWeapons(selectedWeapons.filter((_, i) => i !== index));
   };
   
+  const handleChassisChange = (newUnitId: string) => {
+    const newUnit = allUnits.find(u => u.id === newUnitId);
+    if (newUnit) {
+      setSelectedUnitId(newUnitId);
+      setMechName(newUnit.name);
+      // Reset weapons to the new chassis default loadout
+      setSelectedWeapons(newUnit.weapons.map(w => w.name));
+    }
+  };
+  
   const locations = ['HD', 'CT', 'RT', 'LT', 'RA', 'LA', 'RL', 'LL'];
   
   return (
