@@ -27,10 +27,11 @@ import { UnitSetup } from '@/screens/UnitSetup';
 import { BattleScreen } from '@/screens/BattleScreen';
 import { CampaignScreen } from '@/components/CampaignScreen';
 import { MultiplayerLobby } from '@/components/MultiplayerLobby';
+import { NetworkMultiplayerLobby } from '@/components/NetworkMultiplayerLobby';
 import { MechLab } from '@/components/MechLab';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
-type AppScreen = 'main-menu' | 'setup' | 'game' | 'campaign' | 'multiplayer-lobby' | 'mech-lab';
+type AppScreen = 'main-menu' | 'setup' | 'game' | 'campaign' | 'multiplayer-lobby' | 'network-lobby' | 'mech-lab';
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('main-menu');
@@ -212,6 +213,9 @@ function App() {
         onHotseat={() => {
           setCurrentScreen('setup');
         }}
+        onNetworkPlay={() => {
+          setCurrentScreen('network-lobby');
+        }}
         onMechLab={() => {
           setMechLabMech(availableUnits[0]);
           setCurrentScreen('mech-lab');
@@ -234,6 +238,19 @@ function App() {
     return (
       <MultiplayerLobby
         onStartGame={(_mode: GameMode, _config: any) => {
+          setCurrentScreen('setup');
+        }}
+        onBack={() => setCurrentScreen('main-menu')}
+      />
+    );
+  }
+  
+  if (currentScreen === 'network-lobby') {
+    return (
+      <NetworkMultiplayerLobby
+        onStartGame={(roomId: string, isHost: boolean, playerId: string) => {
+          console.log('Network game starting:', { roomId, isHost, playerId });
+          // TODO: Pass network info to game state
           setCurrentScreen('setup');
         }}
         onBack={() => setCurrentScreen('main-menu')}

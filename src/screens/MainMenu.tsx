@@ -1,14 +1,15 @@
 import { Button } from '@/components/ui/button';
-import { Swords, Users, BookOpen, Gamepad2 } from 'lucide-react';
+import { Swords, Users, BookOpen, Gamepad2, Wifi } from 'lucide-react';
 
 interface MainMenuProps {
   onSinglePlayer: () => void;
   onCampaign: () => void;
   onHotseat: () => void;
+  onNetworkPlay: () => void;
   onMechLab: () => void;
 }
 
-export function MainMenu({ onSinglePlayer, onCampaign, onHotseat, onMechLab }: MainMenuProps) {
+export function MainMenu({ onSinglePlayer, onCampaign, onHotseat, onNetworkPlay, onMechLab }: MainMenuProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-blue-950 to-gray-950 text-white flex items-center justify-center p-4">
       <div className="max-w-2xl w-full">
@@ -45,6 +46,15 @@ export function MainMenu({ onSinglePlayer, onCampaign, onHotseat, onMechLab }: M
           >
             <Users className="w-6 h-6 mr-3" />
             Local Hotseat
+          </Button>
+          
+          <Button
+            onClick={onNetworkPlay}
+            className="h-20 text-lg bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-500 hover:to-cyan-600 shadow-lg shadow-cyan-500/20"
+            data-testid="network-btn"
+          >
+            <Wifi className="w-6 h-6 mr-3" />
+            Online Multiplayer
           </Button>
           
           <Button
