@@ -3,6 +3,7 @@
 export const UnitType = {
   MECH: 'mech',
   VEHICLE: 'vehicle',
+  BATTLE_ARMOR: 'battle_armor',
   ELEMENTAL: 'elemental',
   INFANTRY: 'infantry'
 } as const;

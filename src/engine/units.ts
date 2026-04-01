@@ -438,14 +438,124 @@ export function createJenner(): Unit {
   };
 }
 
-// Get all available units
+// Import additional mechs
+import { 
+  createLocust, 
+  createCommando, 
+  createUrbanmech,
+  createCenturion,
+  createWolverine,
+  createCatapult,
+  createMarauder,
+  createAwesome,
+  createStalker,
+  createKingCrab
+} from './additional-units';
+
+// Import medium/heavy mechs
+import {
+  createShadowhawk,
+  createGriffin,
+  createPhoenixHawk,
+  createTrebuchet
+} from './mechs-medium-advanced';
+
+// Import heavy mechs and clan mechs
+import {
+  createThunderbolt,
+  createOrion,
+  createStormcrow,
+  createMadDog,
+  createWarhawk
+} from './mechs-heavy-clan';
+
+// Import vehicles
+import {
+  createScorpion,
+  createVedette,
+  createRommel,
+  createDemolisher,
+  createStriker
+} from './vehicles';
+
+// Import battle armor
+import {
+  createElemental,
+  createStandardBA,
+  createSalamander,
+  createLonginus,
+  createSylph,
+  createInfiltrator
+} from './battle-armor';
+
+// Get all available units (Mechs + Vehicles)
 export function getAllUnits(): Unit[] {
   return [
-    createAtlasD(),
-    createTimberWolf(),
-    createWarhammer(),
+    // Light Mechs (20-35 tons)
+    createLocust(),
+    createCommando(),
+    createUrbanmech(),
+    createJenner(),
+    
+    // Medium Mechs (40-55 tons)
     createHunchback(),
-    createJenner()
+    createShadowhawk(),
+    createGriffin(),
+    createPhoenixHawk(),
+    createTrebuchet(),
+    createCenturion(),
+    createWolverine(),
+    
+    // Heavy Mechs (60-75 tons)
+    createWarhammer(),
+    createThunderbolt(),
+    createCatapult(),
+    createOrion(),
+    createMarauder(),
+    createTimberWolf(),
+    
+    // Clan Mechs
+    createStormcrow(),
+    createMadDog(),
+    createWarhawk(),
+    
+    // Assault Mechs (80-100 tons)
+    createAwesome(),
+    createStalker(),
+    createAtlasD(),
+    createKingCrab()
+  ];
+}
+
+// Get vehicles only
+export function getAllVehicles(): Unit[] {
+  return [
+    createScorpion(),
+    createStriker(),
+    createVedette(),
+    createRommel(),
+    createDemolisher()
+  ];
+}
+
+// Get battle armor only
+export function getAllBattleArmor(): Unit[] {
+  return [
+    createStandardBA(),
+    createElemental(),
+    createSalamander(),
+    createLonginus(),
+    createSylph(),
+    createInfiltrator()
+  ];
+}
+
+// Get all units including vehicles and battle armor
+export function getAllUnitsAndVehicles(): Unit[] {
+  return [
+    ...getAllUnits(),
+    ...getAllVehicles(),
+    ...getAllBattleArmor()
   ];
 }
 
@@ -456,6 +566,7 @@ export function cloneUnit(unit: Unit): Unit {
     id: `${unit.name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     locations: new Map(unit.locations),
     weapons: unit.weapons.map(w => ({ ...w, shotsRemaining: w.shotsRemaining })),
+    ammo: unit.ammo.map(a => ({ ...a })),
     pilot: { ...unit.pilot },
     position: null
   };

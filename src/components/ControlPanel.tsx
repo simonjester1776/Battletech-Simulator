@@ -5,6 +5,7 @@ import { GamePhase, MovementMode } from '@/types/battletech';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { executePunch, executeKick, executeDFA } from '@/engine/advanced-combat';
 import { 
   Play, 
   SkipForward, 
@@ -212,17 +213,66 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         {phase === GamePhase.COMBAT && !isGameOver && (
           <>
             {selectedUnit && targetUnit && (
-              <Button 
-                onClick={onFireAllWeapons}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                <Target className="w-4 h-4 mr-2" />
-                Fire All
-              </Button>
+              <>
+                <Button 
+                  onClick={onFireAllWeapons}
+                  className="bg-red-600 hover:bg-red-700"
+                  data-testid="fire-all-btn"
+                >
+                  <Target className="w-4 h-4 mr-2" />
+                  Fire All
+                </Button>
+                
+                {/* Physical Attack Buttons */}
+                <div className="flex gap-2 ml-2 border-l border-gray-700 pl-2">
+                  <Button 
+                    onClick={() => {
+                      const result = executePunch(selectedUnit, targetUnit);
+                      console.log(result.log);
+                      // TODO: Apply damage through game state
+                    }}
+                    variant="outline"
+                    className="bg-yellow-900/30 hover:bg-yellow-800/40 border-yellow-600"
+                    data-testid="punch-btn"
+                    title="Punch (Adjacent only)"
+                  >
+                    👊 Punch
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      const result = executeKick(selectedUnit, targetUnit);
+                      console.log(result.log);
+                      // TODO: Apply damage through game state
+                    }}
+                    variant="outline"
+                    className="bg-yellow-900/30 hover:bg-yellow-800/40 border-yellow-600"
+                    data-testid="kick-btn"
+                    title="Kick (Adjacent only)"
+                  >
+                    🦵 Kick
+                  </Button>
+                  {selectedUnit.jumpingMP > 0 && (
+                    <Button 
+                      onClick={() => {
+                        const result = executeDFA(selectedUnit, targetUnit);
+                        console.log(result.log);
+                        // TODO: Apply damage through game state
+                      }}
+                      variant="outline"
+                      className="bg-red-900/30 hover:bg-red-800/40 border-red-600"
+                      data-testid="dfa-btn"
+                      title="Death From Above (Jump capable only)"
+                    >
+                      💥 DFA
+                    </Button>
+                  )}
+                </div>
+              </>
             )}
             <Button 
               onClick={onEndCombat}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-red-600 hover:bg-red-700 ml-auto"
+              data-testid="end-combat-btn"
             >
               <SkipForward className="w-4 h-4 mr-2" />
               End Combat
