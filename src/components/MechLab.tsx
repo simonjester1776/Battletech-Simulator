@@ -24,6 +24,9 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
   const [selectedWeapons, setSelectedWeapons] = useState<string[]>(
     baseMech.weapons.map(w => w.name)
   );
+  const [selectedLocation, setSelectedLocation] = useState<string>('CT');
+  const [techBase, setTechBase] = useState<'IS' | 'CLAN' | 'ALL'>('ALL');
+  const [filterType, setFilterType] = useState<string>('all');
   
   // Update when unit changes
   useEffect(() => {
@@ -31,10 +34,8 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
       setMechName(baseMech.name);
       setSelectedWeapons(baseMech.weapons.map(w => w.name));
     }
-  }, [selectedUnitId]);
-  const [selectedWeapons, setSelectedWeapons] = useState<string[]>(
-    baseMech.weapons.map(w => w.name)
-  );
+  }, [selectedUnitId, baseMech]);
+  
   const [selectedLocation, setSelectedLocation] = useState<string>('CT');
   const [techBase, setTechBase] = useState<'IS' | 'CLAN' | 'ALL'>('ALL');
   const [filterType, setFilterType] = useState<string>('all');
