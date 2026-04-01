@@ -1,2 +1,6 @@
 /.snapshots-e 
 # Environment files - tracked for deployment
+-e 
+# Environment files
+*.env
+*.env.*
