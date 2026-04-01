@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 20% 5%;
+    --foreground: 0 0% 98%;
+    --card: 220 15% 8%;
+    --card-foreground: 0 0% 98%;
+    --popover: 220 15% 8%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 210 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 10% 15%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 220 10% 20%;
+    --muted-foreground: 220 10% 60%;
+    --accent: 210 100% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 10% 20%;
+    --input: 220 10% 15%;
+    --ring: 210 100% 50%;
+    --radius: 0.5rem;
+    --sidebar-background: 220 15% 6%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 210 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 10% 15%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 220 10% 20%;
+    --sidebar-ring: 210 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+  
+  /* Hex grid animations */
+  .hex-pulse {
+    animation: hexPulse 1.5s ease-in-out infinite;
+  }
+  
+  @keyframes hexPulse {
+    0%, 100% {
+      opacity: 0.6;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+  
+  /* Combat flash effect */
+  .combat-flash {
+    animation: combatFlash 0.3s ease-out;
+  }
+  
+  @keyframes combatFlash {
+    0% {
+      background-color: rgba(255, 0, 0, 0.5);
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+  
+  /* Heat glow effect */
+  .heat-glow {
+    animation: heatGlow 2s ease-in-out infinite;
+  }
+  
+  @keyframes heatGlow {
+    0%, 100% {
+      box-shadow: 0 0 5px rgba(255, 100, 0, 0.5);
+    }
+    50% {
+      box-shadow: 0 0 20px rgba(255, 100, 0, 0.8);
+    }
+  }
+  
+  /* Unit selection ring */
+  .unit-selected {
+    box-shadow: 0 0 0 2px hsl(var(--primary)), 0 0 10px hsl(var(--primary));
+  }
+  
+  /* Critical hit shake */
+  .critical-shake {
+    animation: criticalShake 0.5s ease-in-out;
+  }
+  
+  @keyframes criticalShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+  }
+}
+
+@layer utilities {
+  /* Text gradient utility */
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+  }
+  
+  /* Glass effect */
+  .glass {
+    @apply bg-white/5 backdrop-blur-sm border border-white/10;
+  }
+  
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
