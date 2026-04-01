@@ -19,6 +19,7 @@ import {
 } from '@/engine/game';
 import { getHexKey } from '@/engine/hexgrid';
 import { getAllUnits, cloneUnit } from '@/engine/units';
+import { saveGame, loadGame, getSaveList, exportGameAsFile } from '@/lib/save-system';
 
 import { HexGrid } from '@/components/HexGrid';
 import { UnitPanel } from '@/components/UnitPanel';
@@ -27,18 +28,85 @@ import { ControlPanel } from '@/components/ControlPanel';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { Swords, Users, BookOpen } from 'lucide-react';
+import { Swords, Users, BookOpen, Save, FolderOpen, Download } from 'lucide-react';
 
 function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [showSetup, setShowSetup] = useState(true);
   const [gameOver, setGameOver] = useState<{ gameOver: boolean; winner: 'player' | 'ai' | 'draw' | null } | null>(null);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [savedGames, setSavedGames] = useState<Array<{ id: string; name: string; timestamp: number }>>([]);
   
-  const [playerSelections, setPlayerSelections] = useState<string[]>(['atlas-d', 'warhammer', 'hunchback']);
-  const [aiSelections, setAiSelections] = useState<string[]>(['timber-wolf', 'timber-wolf']);
+  const [playerSelections, setPlayerSelections] = useState<string[]>(['atlas', 'warhammer', 'hunchback']);
+  const [aiSelections, setAiSelections] = useState<string[]>(['timber-wolf', 'marauder']);
   
   const availableUnits = getAllUnits();
+  
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (!gameState || gameOver) return;
+      
+      // Ctrl/Cmd + S = Save
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        setShowSaveDialog(true);
+      }
+      
+      // Ctrl/Cmd + L = Load
+      if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+        e.preventDefault();
+        setShowLoadDialog(true);
+        setSavedGames(getSaveList());
+      }
+      
+      // Ctrl/Cmd + E = Export
+      if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+        e.preventDefault();
+        exportGameAsFile(gameState, `battletech-turn-${gameState.turn}.json`);
+      }
+      
+      // Space = End current phase
+      if (e.key === ' ' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        e.preventDefault();
+        if (gameState.phase === 'movement') handleEndMovement();
+        else if (gameState.phase === 'combat') handleEndCombat();
+        else if (gameState.phase === 'heat') handleEndHeat();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [gameState, gameOver]);
+  
+  const handleSaveGame = useCallback(() => {
+    if (!gameState || !saveName.trim()) return;
+    
+    const success = saveGame(gameState, saveName.trim());
+    if (success) {
+      setShowSaveDialog(false);
+      setSaveName('');
+      alert('Game saved successfully!');
+    } else {
+      alert('Failed to save game');
+    }
+  }, [gameState, saveName]);
+  
+  const handleLoadGame = useCallback((saveId: string) => {
+    const loadedState = loadGame(saveId);
+    if (loadedState) {
+      setGameState(loadedState);
+      setShowSetup(false);
+      setShowLoadDialog(false);
+      setGameOver(null);
+    } else {
+      alert('Failed to load game');
+    }
+  }, []);
   
   const startGame = useCallback(() => {
     const playerUnits = playerSelections.map(name => {
@@ -180,14 +248,20 @@ function App() {
   }, [gameState]);
   
   if (showSetup) {
+    const lightMechs = availableUnits.filter(u => u.tonnage < 40);
+    const mediumMechs = availableUnits.filter(u => u.tonnage >= 40 && u.tonnage < 60);
+    const heavyMechs = availableUnits.filter(u => u.tonnage >= 60 && u.tonnage < 80);
+    const assaultMechs = availableUnits.filter(u => u.tonnage >= 80);
+    
     return (
       <div className="min-h-screen bg-gray-950 text-white p-8">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <header className="text-center mb-8">
             <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-red-400 bg-clip-text text-transparent">
               BattleTech Tactical Simulator
             </h1>
             <p className="text-gray-400">Classic CBT Rules - Accurate Combat Simulation</p>
+            <p className="text-sm text-gray-500 mt-2">Now with 16 Mech Variants!</p>
           </header>
           
           <div className="bg-gray-900 border border-gray-700 rounded-lg p-6">
@@ -199,83 +273,103 @@ function App() {
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <h3 className="text-lg font-semibold mb-3 text-blue-400">Your Force</h3>
-                <div className="space-y-2">
-                  {availableUnits.map(unit => {
-                    const key = unit.name.toLowerCase().split(' ')[0];
-                    const isSelected = playerSelections.includes(key);
-                    
-                    return (
-                      <label 
-                        key={unit.id}
-                        className={cn(
-                          "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
-                          isSelected
-                            ? "bg-blue-900/30 border-blue-500"
-                            : "bg-gray-800 border-gray-700 hover:bg-gray-750"
-                        )}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setPlayerSelections([...playerSelections, key]);
-                            } else {
-                              setPlayerSelections(playerSelections.filter(s => s !== key));
-                            }
-                          }}
-                          className="w-4 h-4"
-                        />
-                        <div>
-                          <p className="font-medium">{unit.name}</p>
-                          <p className="text-xs text-gray-400">
-                            {unit.tonnage}t | BV: {unit.bv2} | {unit.walkingMP}/{unit.runningMP} MP
-                          </p>
-                        </div>
-                      </label>
-                    );
-                  })}
+                <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+                  {[
+                    { title: 'Light Mechs (20-35t)', mechs: lightMechs },
+                    { title: 'Medium Mechs (40-55t)', mechs: mediumMechs },
+                    { title: 'Heavy Mechs (60-75t)', mechs: heavyMechs },
+                    { title: 'Assault Mechs (80-100t)', mechs: assaultMechs }
+                  ].map(category => (
+                    <div key={category.title}>
+                      <p className="text-xs font-semibold text-gray-500 mb-1">{category.title}</p>
+                      {category.mechs.map(unit => {
+                        const key = unit.name.toLowerCase().split(' ')[0];
+                        const isSelected = playerSelections.includes(key);
+                        
+                        return (
+                          <label 
+                            key={unit.id}
+                            className={cn(
+                              "flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-colors mb-1",
+                              isSelected
+                                ? "bg-blue-900/30 border-blue-500"
+                                : "bg-gray-800 border-gray-700 hover:bg-gray-750"
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setPlayerSelections([...playerSelections, key]);
+                                } else {
+                                  setPlayerSelections(playerSelections.filter(s => s !== key));
+                                }
+                              }}
+                              className="w-4 h-4"
+                            />
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">{unit.name}</p>
+                              <p className="text-xs text-gray-400">
+                                {unit.tonnage}t | BV: {unit.bv2} | {unit.walkingMP}/{unit.runningMP}{unit.jumpingMP > 0 ? `/${unit.jumpingMP}` : ''} MP
+                              </p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
               </div>
               
               <div>
                 <h3 className="text-lg font-semibold mb-3 text-red-400">Opposing Force</h3>
-                <div className="space-y-2">
-                  {availableUnits.map(unit => {
-                    const key = unit.name.toLowerCase().split(' ')[0];
-                    const isSelected = aiSelections.includes(key);
-                    
-                    return (
-                      <label 
-                        key={unit.id}
-                        className={cn(
-                          "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
-                          isSelected
-                            ? "bg-red-900/30 border-red-500"
-                            : "bg-gray-800 border-gray-700 hover:bg-gray-750"
-                        )}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setAiSelections([...aiSelections, key]);
-                            } else {
-                              setAiSelections(aiSelections.filter(s => s !== key));
-                            }
-                          }}
-                          className="w-4 h-4"
-                        />
-                        <div>
-                          <p className="font-medium">{unit.name}</p>
-                          <p className="text-xs text-gray-400">
-                            {unit.tonnage}t | BV: {unit.bv2} | {unit.walkingMP}/{unit.runningMP} MP
-                          </p>
-                        </div>
-                      </label>
-                    );
-                  })}
+                <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+                  {[
+                    { title: 'Light Mechs (20-35t)', mechs: lightMechs },
+                    { title: 'Medium Mechs (40-55t)', mechs: mediumMechs },
+                    { title: 'Heavy Mechs (60-75t)', mechs: heavyMechs },
+                    { title: 'Assault Mechs (80-100t)', mechs: assaultMechs }
+                  ].map(category => (
+                    <div key={category.title}>
+                      <p className="text-xs font-semibold text-gray-500 mb-1">{category.title}</p>
+                      {category.mechs.map(unit => {
+                        const key = unit.name.toLowerCase().split(' ')[0];
+                        const isSelected = aiSelections.includes(key);
+                        
+                        return (
+                          <label 
+                            key={unit.id}
+                            className={cn(
+                              "flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-colors mb-1",
+                              isSelected
+                                ? "bg-red-900/30 border-red-500"
+                                : "bg-gray-800 border-gray-700 hover:bg-gray-750"
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setAiSelections([...aiSelections, key]);
+                                } else {
+                                  setAiSelections(aiSelections.filter(s => s !== key));
+                                }
+                              }}
+                              className="w-4 h-4"
+                            />
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">{unit.name}</p>
+                              <p className="text-xs text-gray-400">
+                                {unit.tonnage}t | BV: {unit.bv2} | {unit.walkingMP}/{unit.runningMP}{unit.jumpingMP > 0 ? `/${unit.jumpingMP}` : ''} MP
+                              </p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -333,6 +427,38 @@ function App() {
               BattleTech Tactical Simulator
             </h1>
             <p className="text-xs text-gray-500">Turn {gameState.turn} | {gameState.phase}</p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSaveDialog(true)}
+              data-testid="save-game-btn"
+            >
+              <Save className="w-4 h-4 mr-1" />
+              Save
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSavedGames(getSaveList());
+                setShowLoadDialog(true);
+              }}
+              data-testid="load-game-btn"
+            >
+              <FolderOpen className="w-4 h-4 mr-1" />
+              Load
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportGameAsFile(gameState, `battletech-turn-${gameState.turn}.json`)}
+              data-testid="export-game-btn"
+            >
+              <Download className="w-4 h-4 mr-1" />
+              Export
+            </Button>
           </div>
           <div className="flex gap-4 text-sm">
             <div className="text-center">
@@ -435,9 +561,76 @@ function App() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-center gap-4 mt-4">
-            <Button onClick={restartGame} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={restartGame} className="bg-blue-600 hover:bg-blue-700" data-testid="play-again-btn">
               Play Again
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+        <DialogContent className="bg-gray-900 border-gray-700 text-white">
+          <DialogHeader>
+            <DialogTitle>Save Game</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Enter a name for your save
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              placeholder="Save name..."
+              className="bg-gray-800 border-gray-700 text-white"
+              data-testid="save-name-input"
+              onKeyPress={(e) => e.key === 'Enter' && handleSaveGame()}
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowSaveDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveGame}
+                disabled={!saveName.trim()}
+                className="bg-blue-600 hover:bg-blue-700"
+                data-testid="confirm-save-btn"
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={showLoadDialog} onOpenChange={setShowLoadDialog}>
+        <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle>Load Game</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Select a saved game to load
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {savedGames.length === 0 ? (
+              <p className="text-center text-gray-500 py-8">No saved games found</p>
+            ) : (
+              savedGames.map((save) => (
+                <div
+                  key={save.id}
+                  className="p-3 bg-gray-800 rounded border border-gray-700 hover:border-blue-500 cursor-pointer"
+                  onClick={() => handleLoadGame(save.id)}
+                  data-testid={`load-save-${save.id}`}
+                >
+                  <p className="font-medium">{save.name}</p>
+                  <p className="text-xs text-gray-400">
+                    {new Date(save.timestamp).toLocaleString()}
+                  </p>
+                </div>
+              ))
+            )}
           </div>
         </DialogContent>
       </Dialog>

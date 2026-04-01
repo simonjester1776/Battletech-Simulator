@@ -438,14 +438,45 @@ export function createJenner(): Unit {
   };
 }
 
+// Import additional mechs
+import { 
+  createLocust, 
+  createCommando, 
+  createUrbanmech,
+  createCenturion,
+  createWolverine,
+  createCatapult,
+  createMarauder,
+  createAwesome,
+  createStalker,
+  createKingCrab
+} from './additional-units';
+
 // Get all available units
 export function getAllUnits(): Unit[] {
   return [
-    createAtlasD(),
-    createTimberWolf(),
-    createWarhammer(),
+    // Light Mechs (20-35 tons)
+    createLocust(),
+    createCommando(),
+    createUrbanmech(),
+    createJenner(),
+    
+    // Medium Mechs (40-55 tons)
     createHunchback(),
-    createJenner()
+    createCenturion(),
+    createWolverine(),
+    
+    // Heavy Mechs (60-75 tons)
+    createWarhammer(),
+    createCatapult(),
+    createMarauder(),
+    createTimberWolf(),
+    
+    // Assault Mechs (80-100 tons)
+    createAwesome(),
+    createStalker(),
+    createAtlasD(),
+    createKingCrab()
   ];
 }
 
@@ -456,6 +487,7 @@ export function cloneUnit(unit: Unit): Unit {
     id: `${unit.name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     locations: new Map(unit.locations),
     weapons: unit.weapons.map(w => ({ ...w, shotsRemaining: w.shotsRemaining })),
+    ammo: unit.ammo.map(a => ({ ...a })),
     pilot: { ...unit.pilot },
     position: null
   };

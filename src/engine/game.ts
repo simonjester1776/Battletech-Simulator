@@ -11,33 +11,35 @@ import { cloneUnit } from './units';
 export function initializeGame(playerUnits: Unit[], aiUnits: Unit[]): GameState {
   const grid = createHexGrid(10);
   
+  // Clone units once and position them
+  const clonedPlayerUnits = playerUnits.map(cloneUnit);
+  const clonedAiUnits = aiUnits.map(cloneUnit);
+  
   // Position player units on one side
-  playerUnits.forEach((unit, index) => {
-    const unitCopy = cloneUnit(unit);
-    unitCopy.position = { q: -5 + index * 2, r: 5, s: -(-5 + index * 2) - 5 };
-    unitCopy.facing = 0;
+  clonedPlayerUnits.forEach((unit, index) => {
+    unit.position = { q: -5 + index * 2, r: 5, s: -(-5 + index * 2) - 5 };
+    unit.facing = 0;
     
-    const hex = getHex(grid, unitCopy.position);
+    const hex = getHex(grid, unit.position);
     if (hex) {
-      hex.unit = unitCopy;
+      hex.unit = unit;
       setHex(grid, hex);
     }
   });
   
   // Position AI units on the other side
-  aiUnits.forEach((unit, index) => {
-    const unitCopy = cloneUnit(unit);
-    unitCopy.position = { q: 5 - index * 2, r: -5, s: -(5 - index * 2) - (-5) };
-    unitCopy.facing = 3;
+  clonedAiUnits.forEach((unit, index) => {
+    unit.position = { q: 5 - index * 2, r: -5, s: -(5 - index * 2) - (-5) };
+    unit.facing = 3;
     
-    const hex = getHex(grid, unitCopy.position);
+    const hex = getHex(grid, unit.position);
     if (hex) {
-      hex.unit = unitCopy;
+      hex.unit = unit;
       setHex(grid, hex);
     }
   });
   
-  const allUnits = [...playerUnits.map(cloneUnit), ...aiUnits.map(cloneUnit)];
+  const allUnits = [...clonedPlayerUnits, ...clonedAiUnits];
   
   return {
     turn: 1,
