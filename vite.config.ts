@@ -12,4 +12,14 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    host: '0.0.0.0',
+    port: 3000,
+    allowedHosts: [
+      'localhost',
+      '.emergentcf.cloud',
+      '.preview.emergentcf.cloud',
+      'quality-mech-update.cluster-0.preview.emergentcf.cloud'
+    ]
+  }
 });
