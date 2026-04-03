@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Crosshair, Thermometer, User, Shield, Heart } from 'lucide-react';
+import { getMechIcon, hasMechImages } from '@/lib/mech-images';
 
 interface UnitPanelProps {
   unit: Unit | null;
@@ -187,11 +188,24 @@ export const UnitPanel: React.FC<UnitPanelProps> = ({
         onClick={onSelect}
       >
         <div className="flex justify-between items-start">
-          <div>
-            <h3 className="font-bold text-white">{unit.name}</h3>
-            <p className="text-xs text-gray-400">
-              {unit.tonnage}t | {unit.walkingMP}/{unit.runningMP}{unit.jumpingMP > 0 ? `/${unit.jumpingMP}` : ''} MP
-            </p>
+          <div className="flex items-center gap-3">
+            {/* Mech Icon */}
+            <div className="mech-icon w-12 h-12 flex-shrink-0">
+              <img 
+                src={getMechIcon(unit.name)} 
+                alt={unit.name}
+                className="max-w-full max-h-full object-contain"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/images/madcat_icon.gif';
+                }}
+              />
+            </div>
+            <div>
+              <h3 className="font-bold text-white mech-label">{unit.name}</h3>
+              <p className="text-xs text-gray-400">
+                {unit.tonnage}t | {unit.walkingMP}/{unit.runningMP}{unit.jumpingMP > 0 ? `/${unit.jumpingMP}` : ''} MP
+              </p>
+            </div>
           </div>
           <div className="flex flex-col items-end gap-1">
             <Badge 
