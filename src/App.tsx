@@ -10,6 +10,9 @@ import {
   moveSelectedUnit,
   selectTarget,
   fireAllWeapons,
+  executePunchAttack,
+  executeKickAttack,
+  executeDFAAttack,
   endMovementPhase,
   endCombatPhase,
   endHeatPhase,
@@ -43,14 +46,21 @@ function App() {
   const [campaignManager, setCampaignManager] = useState<CampaignManager | null>(null);
   const [currentContract] = useState<Contract | null>(null);
   
-  const [playerSelections, setPlayerSelections] = useState<string[]>(['atlas', 'warhammer', 'hunchback']);
-  const [aiSelections, setAiSelections] = useState<string[]>(['timber-wolf', 'marauder']);
+  const initialUnits = getAllUnitsAndVehicles();
+  const [availableUnits, setAvailableUnits] = useState<Unit[]>(initialUnits);
+  const [playerSelections, setPlayerSelections] = useState<string[]>(() => [
+    initialUnits.find(u => u.name.toLowerCase().includes('atlas'))?.id,
+    initialUnits.find(u => u.name.toLowerCase().includes('warhammer'))?.id,
+    initialUnits.find(u => u.name.toLowerCase().includes('hunchback'))?.id
+  ].filter(Boolean) as string[]);
+  const [aiSelections, setAiSelections] = useState<string[]>(() => [
+    initialUnits.find(u => u.name.toLowerCase().includes('timber wolf'))?.id,
+    initialUnits.find(u => u.name.toLowerCase().includes('marauder'))?.id
+  ].filter(Boolean) as string[]);
   
   const [missionObjectives] = useState<MissionObjective[]>([
     generateEliminationMission()
   ]);
-  
-  const availableUnits = getAllUnitsAndVehicles();
   
   // Check game over condition
   useEffect(() => {
@@ -64,20 +74,14 @@ function App() {
   
   // Game initialization and management
   const startGame = useCallback(() => {
-    const playerUnits = playerSelections.map(name => {
-      const template = availableUnits.find(u => 
-        u.name.toLowerCase().includes(name.toLowerCase()) ||
-        name.toLowerCase().includes(u.name.split(' ')[0].toLowerCase())
-      );
+    const playerUnits = playerSelections.map(id => {
+      const template = availableUnits.find(u => u.id === id);
       return template ? cloneUnit(template) : cloneUnit(availableUnits[0]);
     });
     
-    const aiUnits = aiSelections.map(name => {
-      const template = availableUnits.find(u => 
-        u.name.toLowerCase().includes(name.toLowerCase()) ||
-        name.toLowerCase().includes(u.name.split(' ')[0].toLowerCase())
-      );
-      return template ? cloneUnit(template) : cloneUnit(availableUnits[1]);
+    const aiUnits = aiSelections.map(id => {
+      const template = availableUnits.find(u => u.id === id);
+      return template ? cloneUnit(template) : cloneUnit(availableUnits[1] || availableUnits[0]);
     });
     
     const newGame = initializeGame(playerUnits, aiUnits);
@@ -200,6 +204,24 @@ function App() {
     setGameState(newState);
   }, [gameState]);
   
+  const handlePunchAttack = useCallback(() => {
+    if (!gameState) return;
+    const newState = executePunchAttack(gameState);
+    setGameState(newState);
+  }, [gameState]);
+  
+  const handleKickAttack = useCallback(() => {
+    if (!gameState) return;
+    const newState = executeKickAttack(gameState);
+    setGameState(newState);
+  }, [gameState]);
+  
+  const handleDFAAttack = useCallback(() => {
+    if (!gameState) return;
+    const newState = executeDFAAttack(gameState);
+    setGameState(newState);
+  }, [gameState]);
+  
   const handleAIturn = useCallback(() => {
     if (!gameState) return;
     const newState = executeAITurn(gameState);
@@ -266,7 +288,9 @@ function App() {
       <MechLab
         onSave={(customMech) => {
           console.log('Saved custom mech:', customMech);
-          setCurrentScreen('main-menu');
+          setAvailableUnits(prev => [...prev, customMech]);
+          setPlayerSelections(prev => [...prev, customMech.id]);
+          setCurrentScreen('setup');
         }}
         onCancel={() => setCurrentScreen('main-menu')}
       />
@@ -299,6 +323,9 @@ function App() {
         onEndHeat={handleEndHeat}
         onMovementModeChange={handleMovementModeChange}
         onFireAllWeapons={handleFireAllWeapons}
+        onPunchAttack={handlePunchAttack}
+        onKickAttack={handleKickAttack}
+        onDFAAttack={handleDFAAttack}
         onRestart={restartGame}
         onAIturn={handleAIturn}
         onBack={() => setCurrentScreen('main-menu')}

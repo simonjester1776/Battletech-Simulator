@@ -5,7 +5,6 @@ import { GamePhase, MovementMode } from '@/types/battletech';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { executePunch, executeKick, executeDFA } from '@/engine/advanced-combat';
 import { 
   Play, 
   SkipForward, 
@@ -25,6 +24,9 @@ interface ControlPanelProps {
   onEndHeat: () => void;
   onMovementModeChange: (mode: MovementMode) => void;
   onFireAllWeapons: () => void;
+  onPunchAttack: () => void;
+  onKickAttack: () => void;
+  onDFAAttack: () => void;
   onRestart: () => void;
   onAIturn: () => void;
 }
@@ -37,6 +39,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onEndHeat,
   onMovementModeChange,
   onFireAllWeapons,
+  onPunchAttack,
+  onKickAttack,
+  onDFAAttack,
   onRestart,
   onAIturn
 }) => {
@@ -226,11 +231,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 {/* Physical Attack Buttons */}
                 <div className="flex gap-2 ml-2 border-l border-gray-700 pl-2">
                   <Button 
-                    onClick={() => {
-                      const result = executePunch(selectedUnit, targetUnit);
-                      console.log(result.log);
-                      // TODO: Apply damage through game state
-                    }}
+                    onClick={onPunchAttack}
                     variant="outline"
                     className="bg-yellow-900/30 hover:bg-yellow-800/40 border-yellow-600"
                     data-testid="punch-btn"
@@ -239,11 +240,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     👊 Punch
                   </Button>
                   <Button 
-                    onClick={() => {
-                      const result = executeKick(selectedUnit, targetUnit);
-                      console.log(result.log);
-                      // TODO: Apply damage through game state
-                    }}
+                    onClick={onKickAttack}
                     variant="outline"
                     className="bg-yellow-900/30 hover:bg-yellow-800/40 border-yellow-600"
                     data-testid="kick-btn"
@@ -253,11 +250,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   </Button>
                   {selectedUnit.jumpingMP > 0 && (
                     <Button 
-                      onClick={() => {
-                        const result = executeDFA(selectedUnit, targetUnit);
-                        console.log(result.log);
-                        // TODO: Apply damage through game state
-                      }}
+                      onClick={onDFAAttack}
                       variant="outline"
                       className="bg-red-900/30 hover:bg-red-800/40 border-red-600"
                       data-testid="dfa-btn"

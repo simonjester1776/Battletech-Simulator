@@ -3,11 +3,10 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { GameMode } from '@/lib/multiplayer';
 import { HotSeatManager, NetworkManager } from '@/lib/multiplayer';
 import { cn } from '@/lib/utils';
-import { Users, Wifi, Monitor } from 'lucide-react';
+import { Wifi, Monitor } from 'lucide-react';
 
 interface MultiplayerLobbyProps {
   onStartGame: (mode: GameMode, config: any) => void;
@@ -20,7 +19,6 @@ export function MultiplayerLobby({ onStartGame, onBack }: MultiplayerLobbyProps)
   const [player2Name, setPlayer2Name] = useState('Player 2');
   const [roomCode, setRoomCode] = useState('');
   const [generatedRoomCode, setGeneratedRoomCode] = useState('');
-  const [isHost, setIsHost] = useState(false);
   
   const modes = [
     {
@@ -43,7 +41,6 @@ export function MultiplayerLobby({ onStartGame, onBack }: MultiplayerLobbyProps)
     const manager = new NetworkManager();
     const code = await manager.createRoom();
     setGeneratedRoomCode(code);
-    setIsHost(true);
   };
   
   const handleJoinRoom = () => {

@@ -30,18 +30,38 @@ function getTerrainColor(terrain: TerrainType): string {
   }
 }
 
-// Get terrain pattern
-function getTerrainPattern(terrain: TerrainType): string {
-  switch (terrain) {
-    case TerrainType.LIGHT_WOODS:
-      return 'url(#lightWoodsPattern)';
-    case TerrainType.HEAVY_WOODS:
-      return 'url(#heavyWoodsPattern)';
-    case TerrainType.ROUGH:
-      return 'url(#roughPattern)';
-    default:
-      return '';
-  }
+// Get mech image path
+function getMechImage(unit: Unit): string {
+  const nameMap: { [key: string]: string } = {
+    'AS7-D Atlas': 'atlas',
+    'Awesome': 'awesome',
+    'Catapult': 'catapult',
+    'Centurion': 'centurion',
+    'COM-2D Commando': 'commando',
+    'Cougar A': 'cougar',
+    'FS9-H Firestarter': 'firestarter',
+    'BZK-F3 Hollander': 'hollander',
+    'HBK-4G Hunchback': 'hunchback',
+    'HBK-2C Hunchback': 'hunchback2c',
+    'JM6-S Jagermech': 'jagermech',
+    'Loki S': 'loki',
+    'Mad Dog': 'madcat',
+    'Warhawk': 'masakari',
+    'RVN-3L Raven': 'raven',
+    'Thor A': 'thor',
+    'Uller A': 'uller',
+    'Vulture': 'vulture',
+    'Sparrowhawk': 'vulture', // Placeholder - no image
+    'Shilone': 'vulture', // Placeholder - no image
+    'Lucifer': 'vulture', // Placeholder - no image
+    'Thunderbird': 'vulture', // Placeholder - no image
+    'Corsair': 'vulture', // Placeholder - no image
+    'Chippewa CHP-W5': 'vulture', // Placeholder - no image
+    'Visigoth (Clan)': 'vulture' // Placeholder - no image
+  };
+  
+  const baseName = nameMap[unit.name] || unit.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return `/images/${baseName}.gif`;
 }
 
 // Single Hex Component
@@ -64,7 +84,6 @@ const Hexagon: React.FC<{
   }
   
   const terrainColor = getTerrainColor(hex.terrain);
-  const terrainPattern = getTerrainPattern(hex.terrain);
   
   return (
     <g 
@@ -73,7 +92,7 @@ const Hexagon: React.FC<{
     >
       <polygon
         points={points.join(' ')}
-        fill={terrainPattern || terrainColor}
+        fill={terrainColor}
         stroke={isSelected ? '#FFD700' : isValidMove ? '#00FF00' : isValidTarget ? '#FF0000' : '#333'}
         strokeWidth={isSelected ? 3 : isValidMove || isValidTarget ? 2 : 1}
         className={cn(
@@ -107,23 +126,15 @@ const Hexagon: React.FC<{
       
       {hex.unit && (
         <g>
-          <circle
-            cx={x}
-            cy={y}
-            r={size * 0.5}
-            fill={hex.unit.shutdown ? '#666' : '#1E90FF'}
-            stroke="#FFF"
-            strokeWidth={2}
+          <image
+            x={x - size * 0.4}
+            y={y - size * 0.4}
+            width={size * 0.8}
+            height={size * 0.8}
+            href={getMechImage(hex.unit)}
+            opacity={hex.unit.shutdown ? 0.5 : 1}
+            style={{ imageRendering: 'pixelated' }}
           />
-          <text
-            x={x}
-            y={y + 4}
-            textAnchor="middle"
-            className="text-xs fill-white font-bold"
-            style={{ fontSize: size * 0.2 }}
-          >
-            {hex.unit.name.substring(0, 3)}
-          </text>
           
           <line
             x1={x}

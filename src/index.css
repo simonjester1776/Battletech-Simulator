@@ -2,6 +2,72 @@
 @tailwind components;
 @tailwind utilities;
 
+/* BattleTech Fonts */
+@font-face {
+  font-family: 'Battletech';
+  src: url('/fonts/BTLogo_old.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'HeavyMetal1';
+  src: url('/fonts/Hvymtl1.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'HeavyMetal2';
+  src: url('/fonts/Hvymtl2.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'HeavyMetal5';
+  src: url('/fonts/HVYMTL5.TTF') format('truetype');
+}
+
+/* Custom Cursors */
+.cursor-catapult {
+  cursor: url('/cursors/Catapult Run.ani'), auto;
+}
+
+.cursor-mechwarrior {
+  cursor: url('/cursors/MECHWA~1.ANI'), auto;
+}
+
+.cursor-mechwarrior2 {
+  cursor: url('/cursors/MECHWA~2.ANI'), auto;
+}
+
+.cursor-mechwarrior3 {
+  cursor: url('/cursors/MECHWA~3.ANI'), auto;
+}
+
+.cursor-madcat {
+  cursor: url('/cursors/madcat/madcat.ani'), auto;
+}
+
+.cursor-kodiak {
+  cursor: url('/cursors/KODIAK~1.ANI'), auto;
+}
+
+.cursor-thunderbird {
+  cursor: url('/cursors/THUNDE~1.ANI'), auto;
+}
+
+.cursor-elemental {
+  cursor: url('/cursors/ELEMEN~1.ANI'), auto;
+}
+
+.cursor-mercenary1 {
+  cursor: url('/cursors/MERCEN~1.ANI'), auto;
+}
+
+.cursor-mercenary2 {
+  cursor: url('/cursors/MERCEN~2.ANI'), auto;
+}
+
+.cursor-erlking {
+  cursor: url('/cursors/ERLARG~1.CUR'), auto;
+}
+
 @layer base {
   :root {
     --background: 220 20% 5%;
@@ -46,7 +112,16 @@
   
   body {
     @apply bg-background text-foreground antialiased;
+    font-family: 'Battletech', system-ui, -apple-system, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  .hvymtl1 {
+    font-family: 'HeavyMetal1', 'Battletech', system-ui, -apple-system, sans-serif;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Battletech', system-ui, -apple-system, sans-serif;
   }
 }
 

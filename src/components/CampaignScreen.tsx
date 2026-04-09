@@ -1,19 +1,16 @@
 // Campaign Management UI
 
 import { useState } from 'react';
-import type { MercenaryCompany, Contract, Pilot, MechBay } from '@/lib/campaign';
+import type { MercenaryCompany, Contract } from '@/lib/campaign';
 import { CampaignManager } from '@/lib/campaign';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { 
-  Swords, 
   Users, 
   Wrench, 
   DollarSign, 
   Award,
   Shield,
-  Calendar,
   FileText
 } from 'lucide-react';
 
@@ -25,7 +22,6 @@ interface CampaignScreenProps {
 
 export function CampaignScreen({ campaignManager, onStartMission, onBack }: CampaignScreenProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'pilots' | 'mechs' | 'contracts' | 'salvage'>('overview');
-  const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [availableContracts] = useState<Contract[]>(campaignManager.generateContracts(5));
   
   const company = campaignManager.getCompany();
@@ -112,7 +108,7 @@ export function CampaignScreen({ campaignManager, onStartMission, onBack }: Camp
         {/* Content */}
         <div className="bg-gray-900 border border-gray-700 rounded-lg p-6">
           {activeTab === 'overview' && <OverviewTab company={company} />}
-          {activeTab === 'pilots' && <PilotsTab company={company} manager={campaignManager} />}
+          {activeTab === 'pilots' && <PilotsTab company={company} />}
           {activeTab === 'mechs' && <MechsTab company={company} manager={campaignManager} />}
           {activeTab === 'contracts' && (
             <ContractsTab 
@@ -172,7 +168,7 @@ function OverviewTab({ company }: { company: MercenaryCompany }) {
   );
 }
 
-function PilotsTab({ company, manager }: { company: MercenaryCompany; manager: CampaignManager }) {
+function PilotsTab({ company }: { company: MercenaryCompany }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">

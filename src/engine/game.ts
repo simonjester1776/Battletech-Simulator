@@ -4,6 +4,7 @@ import type { GameState, Unit, HexCoord, LogEntry } from '@/types/battletech';
 import { GamePhase, MovementMode } from '@/types/battletech';
 import { createHexGrid, getHex, setHex, getValidMovementHexes, moveUnit } from './hexgrid';
 import { resolveAttack, resolveHeatPhase, hexDistance } from './combat';
+import { executePunch, executeKick, executeDFA } from './advanced-combat';
 import { roll2d6 } from './dice';
 import { cloneUnit } from './units';
 
@@ -200,6 +201,138 @@ export function fireAllWeapons(state: GameState): GameState {
   for (const weapon of attacker.weapons) {
     if (weapon.damage > 0) {
       newState = fireWeapon(newState, weapon.id);
+    }
+  }
+  
+  return newState;
+}
+
+// Execute punch attack
+export function executePunchAttack(state: GameState): GameState {
+  if (!state.selectedUnit || !state.targetUnit) return state;
+  
+  const newState = { ...state };
+  const attacker = newState.units.find(u => u.id === state.selectedUnit!.id);
+  const target = newState.units.find(u => u.id === state.targetUnit!.id);
+  
+  if (!attacker || !target || !attacker.position || !target.position) return state;
+  
+  const result = executePunch(attacker, target);
+  
+  addLogEntry(newState, result.log, result.success ? 'combat' : 'info');
+  
+  if (!target.alive) {
+    addLogEntry(newState, `${target.name} DESTROYED!`, 'critical');
+    
+    const targetIndex = newState.units.indexOf(target);
+    const isPlayerUnit = targetIndex < newState.units.length / 2;
+    
+    if (isPlayerUnit) {
+      newState.aiScore += target.bv2;
+    } else {
+      newState.playerScore += target.bv2;
+    }
+    
+    const targetHex = getHex(newState.hexGrid, target.position);
+    if (targetHex) {
+      targetHex.unit = null;
+      setHex(newState.hexGrid, targetHex);
+    }
+  }
+  
+  return newState;
+}
+
+// Execute kick attack
+export function executeKickAttack(state: GameState): GameState {
+  if (!state.selectedUnit || !state.targetUnit) return state;
+  
+  const newState = { ...state };
+  const attacker = newState.units.find(u => u.id === state.selectedUnit!.id);
+  const target = newState.units.find(u => u.id === state.targetUnit!.id);
+  
+  if (!attacker || !target || !attacker.position || !target.position) return state;
+  
+  const result = executeKick(attacker, target);
+  
+  addLogEntry(newState, result.log, result.success ? 'combat' : 'info');
+  
+  if (!target.alive) {
+    addLogEntry(newState, `${target.name} DESTROYED!`, 'critical');
+    
+    const targetIndex = newState.units.indexOf(target);
+    const isPlayerUnit = targetIndex < newState.units.length / 2;
+    
+    if (isPlayerUnit) {
+      newState.aiScore += target.bv2;
+    } else {
+      newState.playerScore += target.bv2;
+    }
+    
+    const targetHex = getHex(newState.hexGrid, target.position);
+    if (targetHex) {
+      targetHex.unit = null;
+      setHex(newState.hexGrid, targetHex);
+    }
+  }
+  
+  return newState;
+}
+
+// Execute DFA attack
+export function executeDFAAttack(state: GameState): GameState {
+  if (!state.selectedUnit || !state.targetUnit) return state;
+  
+  const newState = { ...state };
+  const attacker = newState.units.find(u => u.id === state.selectedUnit!.id);
+  const target = newState.units.find(u => u.id === state.targetUnit!.id);
+  
+  if (!attacker || !target || !attacker.position || !target.position) return state;
+  
+  const result = executeDFA(attacker, target);
+  
+  addLogEntry(newState, result.log, result.success ? 'combat' : 'info');
+  
+  // Handle attacker damage from DFA
+  if (result.attackerDamage && result.attackerDamage > 0) {
+    addLogEntry(newState, `${attacker.name} takes ${result.attackerDamage} damage from DFA fall!`, 'critical');
+  }
+  
+  if (!target.alive) {
+    addLogEntry(newState, `${target.name} DESTROYED!`, 'critical');
+    
+    const targetIndex = newState.units.indexOf(target);
+    const isPlayerUnit = targetIndex < newState.units.length / 2;
+    
+    if (isPlayerUnit) {
+      newState.aiScore += target.bv2;
+    } else {
+      newState.playerScore += target.bv2;
+    }
+    
+    const targetHex = getHex(newState.hexGrid, target.position);
+    if (targetHex) {
+      targetHex.unit = null;
+      setHex(newState.hexGrid, targetHex);
+    }
+  }
+  
+  if (!attacker.alive) {
+    addLogEntry(newState, `${attacker.name} DESTROYED by DFA fall!`, 'critical');
+    
+    const attackerIndex = newState.units.indexOf(attacker);
+    const isPlayerUnit = attackerIndex < newState.units.length / 2;
+    
+    if (isPlayerUnit) {
+      newState.aiScore += attacker.bv2;
+    } else {
+      newState.playerScore += attacker.bv2;
+    }
+    
+    const attackerHex = getHex(newState.hexGrid, attacker.position);
+    if (attackerHex) {
+      attackerHex.unit = null;
+      setHex(newState.hexGrid, attackerHex);
     }
   }
   

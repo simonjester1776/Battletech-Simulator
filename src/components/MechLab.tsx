@@ -1,15 +1,15 @@
 // Mech Lab - Custom Mech Builder
 
 import { useState } from 'react';
-import type { Unit } from '@/types/battletech';
-import { WEAPON_DATABASE, type WeaponData } from '@/lib/weapon-database';
-import { getAllUnitsAndVehicles } from '@/engine/units';
+import type { Unit, Weapon } from '@/types/battletech';
+import { UnitType } from '@/types/battletech';
+import { WEAPON_DATABASE } from '@/lib/weapon-database';
+import { getAllUnitsAndVehicles, cloneUnit } from '@/engine/units';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { Wrench, Plus, Trash2, Save, Download, ArrowLeft } from 'lucide-react';
+import { Wrench, Plus, Trash2, Save, Download } from 'lucide-react';
 
 interface MechLabProps {
   onSave: (customizedMech: Unit) => void;
@@ -28,6 +28,68 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
   const [selectedLocation, setSelectedLocation] = useState<string>('CT');
   const [techBase, setTechBase] = useState<'IS' | 'CLAN' | 'ALL'>('ALL');
   const [filterType, setFilterType] = useState<string>('all');
+  // Calculate total armor from locations
+  const totalLocationArmor = Array.from(baseMech.locations.values()).reduce((sum, loc) => sum + loc.armor, 0);
+  const [armorDistribution] = useState<Map<string, number>>(
+    new Map(Array.from(baseMech.locations.entries()).map(([key, loc]: [string, any]) => [key, loc.armor]))
+  );
+  const [heatsinks, setHeatsinks] = useState<number>(baseMech.heatSinks);
+  const [doubleHeatsinks, setDoubleHeatsinks] = useState<boolean>(baseMech.doubleHeatSinks);
+  
+  // Create customized mech with new loadout
+  const createCustomizedMech = (): Unit => {
+    const customMech = cloneUnit(baseMech);
+    customMech.name = mechName;
+    // Apply armor distribution
+    armorDistribution.forEach((armor, location) => {
+      const loc = customMech.locations.get(location);
+      if (loc) {
+        loc.armor = armor;
+      }
+    });
+    customMech.heatSinks = heatsinks;
+    customMech.doubleHeatSinks = doubleHeatsinks;
+    
+    // Convert selected weapon names to Weapon objects
+    customMech.weapons = selectedWeapons
+      .map((weaponName, index) => {
+        const weaponData = WEAPON_DATABASE[weaponName];
+        if (!weaponData) return null;
+        
+        return {
+          id: `${baseMech.id}-${weaponName.toLowerCase().replace(/\s+/g, '-')}-${index}`,
+          name: weaponName,
+          damage: weaponData.damage,
+          heat: weaponData.heat,
+          minRange: weaponData.minRange || 0,
+          shortRange: weaponData.shortRange,
+          mediumRange: weaponData.mediumRange,
+          longRange: weaponData.longRange,
+          type: weaponData.type,
+          shotsRemaining: weaponData.ammoPerTon ? 999 : Infinity,
+          location: selectedLocation,
+          criticalSlots: weaponData.criticalSlots,
+          tonnage: weaponData.tonnage
+        } as Weapon;
+      })
+      .filter((w): w is Weapon => w !== null);
+    
+    return customMech;
+  };
+  
+  const handleExport = () => {
+    const customizedMech = createCustomizedMech();
+    const exportData = JSON.stringify(customizedMech, null, 2);
+    const blob = new Blob([exportData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${customizedMech.name.replace(/\s+/g, '_')}_loadout.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
   
   const availableWeapons = Object.values(WEAPON_DATABASE).filter(weapon => {
     if (techBase !== 'ALL' && weapon.techBase !== 'BOTH' && weapon.techBase !== techBase) {
@@ -59,7 +121,26 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
     return sum + (weapon?.heat || 0);
   }, 0);
   
+  // Calculate remaining capacity
+  const remainingCritSlots = 78 - totalCritSlots;
+  const remainingTonnage = baseMech.tonnage - totalTonnage;
+  const isOverloaded = totalTonnage > baseMech.tonnage || totalCritSlots > 78;
+  
   const addWeapon = (weaponName: string) => {
+    const weapon = WEAPON_DATABASE[weaponName];
+    if (!weapon) return;
+    
+    // Check capacity before adding
+    if (totalCritSlots + weapon.criticalSlots > 78) {
+      alert(`Not enough critical slots! Need ${weapon.criticalSlots}, have ${remainingCritSlots} remaining.`);
+      return;
+    }
+    
+    if (totalTonnage + weapon.tonnage > baseMech.tonnage) {
+      alert(`Not enough tonnage! Need ${weapon.tonnage}t, have ${remainingTonnage.toFixed(1)}t remaining.`);
+      return;
+    }
+    
     setSelectedWeapons([...selectedWeapons, weaponName]);
   };
   
@@ -80,7 +161,7 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
   const locations = ['HD', 'CT', 'RT', 'LT', 'RA', 'LA', 'RL', 'LL'];
   
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-6">
+    <div className="min-h-screen bg-gray-950 text-white p-6 hvymtl1">
       <div className="max-w-7xl mx-auto">
         <header className="mb-6">
           <div className="flex items-center justify-between">
@@ -95,11 +176,11 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
               <Button onClick={onCancel} variant="outline" data-testid="mechlab-cancel">
                 Cancel
               </Button>
-              <Button onClick={() => onSave(baseMech)} className="bg-blue-600 hover:bg-blue-700" data-testid="mechlab-save">
+              <Button onClick={() => onSave(createCustomizedMech())} className="bg-blue-600 hover:bg-blue-700" data-testid="mechlab-save">
                 <Save className="w-4 h-4 mr-2" />
                 Save Design
               </Button>
-              <Button className="bg-green-600 hover:bg-green-700" data-testid="mechlab-export">
+              <Button onClick={handleExport} className="bg-green-600 hover:bg-green-700" data-testid="mechlab-export">
                 <Download className="w-4 h-4 mr-2" />
                 Export
               </Button>
@@ -121,16 +202,16 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
                   </SelectTrigger>
                   <SelectContent className="bg-gray-800 border-gray-700 text-white max-h-96">
                     <div className="px-2 py-1.5 text-xs font-semibold text-blue-400">BATTLEMECHS</div>
-                    {allUnits.filter(u => u.unitType === 'Mech').map(unit => (
+                    {allUnits.filter(u => u.unitType === UnitType.MECH).map(unit => (
                       <SelectItem key={unit.id} value={unit.id} className="text-white">
                         {unit.name} ({unit.tonnage}t)
                       </SelectItem>
                     ))}
                     
-                    {allUnits.some(u => u.unitType === 'Vehicle') && (
+                    {allUnits.some(u => u.unitType === UnitType.VEHICLE) && (
                       <>
                         <div className="px-2 py-1.5 text-xs font-semibold text-blue-400 mt-2">COMBAT VEHICLES</div>
-                        {allUnits.filter(u => u.unitType === 'Vehicle').map(unit => (
+                        {allUnits.filter(u => u.unitType === UnitType.VEHICLE).map(unit => (
                           <SelectItem key={unit.id} value={unit.id} className="text-white">
                             {unit.name} ({unit.tonnage}t)
                           </SelectItem>
@@ -138,10 +219,10 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
                       </>
                     )}
                     
-                    {allUnits.some(u => u.unitType === 'BattleArmor') && (
+                    {allUnits.some(u => u.unitType === UnitType.BATTLE_ARMOR) && (
                       <>
                         <div className="px-2 py-1.5 text-xs font-semibold text-blue-400 mt-2">BATTLE ARMOR</div>
-                        {allUnits.filter(u => u.unitType === 'BattleArmor').map(unit => (
+                        {allUnits.filter(u => u.unitType === UnitType.BATTLE_ARMOR).map(unit => (
                           <SelectItem key={unit.id} value={unit.id} className="text-white">
                             {unit.name}
                           </SelectItem>
@@ -175,6 +256,46 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
               <div>
                 <p className="text-sm text-gray-400">Movement</p>
                 <p className="font-bold">{baseMech.walkingMP}/{baseMech.runningMP}/{baseMech.jumpingMP}</p>
+              </div>
+              
+              <div className="border-t border-gray-700 pt-4 mt-4">
+                <h3 className="font-semibold mb-3 text-yellow-400">Customization</h3>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">Armor Distribution (Manual)</label>
+                    <p className="text-xs text-gray-500 mb-2">Click Armor tab to distribute</p>
+                    <p className="text-xs text-green-400">Total: {totalLocationArmor}t allocated</p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">Heat Sinks</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max={baseMech.heatSinks + 5}
+                      value={heatsinks}
+                      onChange={(e) => setHeatsinks(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="bg-gray-800 border-gray-700 text-white"
+                      data-testid="heatsink-input"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Default: {baseMech.heatSinks}</p>
+                  </div>
+                  
+                  <div className="flex items-center gap-3 bg-gray-800 p-2 rounded border border-gray-700">
+                    <input
+                      type="checkbox"
+                      id="double-heatsinks"
+                      checked={doubleHeatsinks}
+                      onChange={(e) => setDoubleHeatsinks(e.target.checked)}
+                      className="w-4 h-4"
+                      data-testid="double-heatsink-toggle"
+                    />
+                    <label htmlFor="double-heatsinks" className="text-sm text-gray-300 cursor-pointer">
+                      Double Heat Sinks (+5 tonnage each)
+                    </label>
+                  </div>
+                </div>
               </div>
               
               <div className="border-t border-gray-700 pt-4 mt-4">
@@ -214,12 +335,36 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
                     </span>
                   </div>
                   <div className="flex justify-between">
+                    <span className="text-gray-400">Armor Points:</span>
+                    <span className="font-bold text-blue-400">{totalLocationArmor}pt</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Heat Sinks:</span>
+                    <span className="font-bold text-cyan-400">{heatsinks} {doubleHeatsinks ? '(Double)' : ''}</span>
+                  </div>
+                  <div className="flex justify-between">
                     <span className="text-gray-400">Estimated Cost:</span>
                     <span className="font-bold text-green-400">
                       {totalCost.toLocaleString()} C-Bills
                     </span>
                   </div>
+                  <div className="flex justify-between pt-2 border-t border-gray-700">
+                    <span className="text-gray-400">Battle Value:</span>
+                    <span className="font-bold text-yellow-400">{baseMech.bv2.toLocaleString()} (base)</span>
+                  </div>
                 </div>
+                
+                {isOverloaded && (
+                  <div className="mt-4 p-3 bg-red-900/30 border border-red-600 rounded text-red-400 text-sm">
+                    <p className="font-semibold">⚠️ Overloaded Configuration!</p>
+                    {totalTonnage > baseMech.tonnage && (
+                      <p className="text-xs mt-1">Tonnage: {(totalTonnage - baseMech.tonnage).toFixed(1)}t over limit</p>
+                    )}
+                    {totalCritSlots > 78 && (
+                      <p className="text-xs mt-1">Critical Slots: {totalCritSlots - 78} over limit</p>
+                    )}
+                  </div>
+                )}
               </div>
               
               {/* Location Selection */}
@@ -351,7 +496,13 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
                     <Button
                       size="sm"
                       onClick={() => addWeapon(weapon.name)}
-                      className="bg-green-600 hover:bg-green-700"
+                      disabled={remainingCritSlots < weapon.criticalSlots || remainingTonnage < weapon.tonnage}
+                      className={cn(
+                        "transition-colors",
+                        remainingCritSlots < weapon.criticalSlots || remainingTonnage < weapon.tonnage
+                          ? "bg-gray-700 text-gray-500 cursor-not-allowed"
+                          : "bg-green-600 hover:bg-green-700"
+                      )}
                       data-testid={`add-weapon-${weapon.name.replace(/\s+/g, '-')}`}
                     >
                       <Plus className="w-4 h-4" />

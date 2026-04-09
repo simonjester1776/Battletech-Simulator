@@ -25,6 +25,9 @@ interface BattleScreenProps {
   onEndHeat: () => void;
   onMovementModeChange: (mode: MovementMode) => void;
   onFireAllWeapons: () => void;
+  onPunchAttack: () => void;
+  onKickAttack: () => void;
+  onDFAAttack: () => void;
   onRestart: () => void;
   onAIturn: () => void;
   onBack: () => void;
@@ -42,6 +45,9 @@ export function BattleScreen({
   onEndHeat,
   onMovementModeChange,
   onFireAllWeapons,
+  onPunchAttack,
+  onKickAttack,
+  onDFAAttack,
   onRestart,
   onAIturn,
   onBack,
@@ -132,7 +138,7 @@ export function BattleScreen({
     : null;
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-gray-950 text-white hvymtl1">
       <div className="p-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
@@ -243,6 +249,9 @@ export function BattleScreen({
             onEndHeat={onEndHeat}
             onMovementModeChange={onMovementModeChange}
             onFireAllWeapons={onFireAllWeapons}
+            onPunchAttack={onPunchAttack}
+            onKickAttack={onKickAttack}
+            onDFAAttack={onDFAAttack}
             onRestart={onRestart}
             onAIturn={onAIturn}
           />

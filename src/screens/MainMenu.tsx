@@ -14,10 +14,10 @@ export function MainMenu({ onSinglePlayer, onCampaign, onHotseat, onNetworkPlay,
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-blue-950 to-gray-950 text-white flex items-center justify-center p-4">
       <div className="max-w-2xl w-full">
         <div className="text-center mb-12 animate-fade-in">
-          <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+          <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent" style={{ fontFamily: "'Battletech', 'HeavyMetal1', sans-serif", letterSpacing: '0.15em' }}>
             BATTLETECH
           </h1>
-          <p className="text-xl text-gray-400">Tactical Simulator</p>
+          <p className="text-xl text-gray-400" style={{ fontFamily: "'Battletech', 'HeavyMetal1', sans-serif" }}>Tactical Simulator</p>
         </div>
         
         <div className="grid gap-4">

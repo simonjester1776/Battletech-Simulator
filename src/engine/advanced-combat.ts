@@ -1,6 +1,6 @@
 // Advanced Combat Rules - Physical Attacks, Melee, Elevation
 
-import type { Unit, Hex } from '@/types/battletech';
+import type { Unit } from '@/types/battletech';
 import { MovementMode } from '@/types/battletech';
 import { roll2d6 } from './dice';
 import { hexDistance } from './hexgrid';
@@ -294,7 +294,7 @@ export function calculatePartialCoverModifier(
 export function hasLineOfSight(
   attackerPos: ElevationHex,
   targetPos: ElevationHex,
-  mapHexes: Map<string, ElevationHex>
+  _mapHexes: Map<string, ElevationHex>
 ): boolean {
   // Check if intervening terrain blocks LOS
   const distance = hexDistance(attackerPos, targetPos);

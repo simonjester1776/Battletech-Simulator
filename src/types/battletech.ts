@@ -5,7 +5,8 @@ export const UnitType = {
   VEHICLE: 'vehicle',
   BATTLE_ARMOR: 'battle_armor',
   ELEMENTAL: 'elemental',
-  INFANTRY: 'infantry'
+  INFANTRY: 'infantry',
+  AEROSPACE: 'aerospace'
 } as const;
 export type UnitType = typeof UnitType[keyof typeof UnitType];
 

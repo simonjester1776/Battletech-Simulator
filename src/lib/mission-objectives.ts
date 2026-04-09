@@ -2,22 +2,26 @@
 
 import type { Unit, HexCoord } from '@/types/battletech';
 
-export enum ObjectiveType {
-  ELIMINATE_ALL = 'eliminate_all',
-  DEFEND_STRUCTURE = 'defend_structure',
-  CAPTURE_ZONE = 'capture_zone',
-  ESCORT_UNIT = 'escort_unit',
-  ASSASSINATION = 'assassination',
-  SURVIVE = 'survive',
-  DESTROY_TARGET = 'destroy_target',
-}
+export const ObjectiveType = {
+  ELIMINATE_ALL: 'eliminate_all',
+  DEFEND_STRUCTURE: 'defend_structure',
+  CAPTURE_ZONE: 'capture_zone',
+  ESCORT_UNIT: 'escort_unit',
+  ASSASSINATION: 'assassination',
+  SURVIVE: 'survive',
+  DESTROY_TARGET: 'destroy_target',
+} as const;
 
-export enum ObjectiveStatus {
-  PENDING = 'pending',
-  IN_PROGRESS = 'in_progress',
-  COMPLETED = 'completed',
-  FAILED = 'failed',
-}
+export type ObjectiveType = typeof ObjectiveType[keyof typeof ObjectiveType];
+
+export const ObjectiveStatus = {
+  PENDING: 'pending',
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+} as const;
+
+export type ObjectiveStatus = typeof ObjectiveStatus[keyof typeof ObjectiveStatus];
 
 export interface MissionObjective {
   id: string;
@@ -46,7 +50,6 @@ export interface MissionObjective {
 
 export class MissionObjectiveManager {
   private objectives: MissionObjective[] = [];
-  private currentTurn = 0;
 
   addObjective(objective: MissionObjective) {
     this.objectives.push(objective);
@@ -82,7 +85,6 @@ export class MissionObjectiveManager {
     enemyUnits: Unit[],
     turn: number
   ): { completed: string[]; failed: string[] } {
-    this.currentTurn = turn;
     const completed: string[] = [];
     const failed: string[] = [];
 
