@@ -11,19 +11,39 @@ interface MainMenuProps {
 
 export function MainMenu({ onSinglePlayer, onCampaign, onHotseat, onNetworkPlay, onMechLab }: MainMenuProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-blue-950 to-gray-950 text-white flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-blue-950 to-gray-950 text-white flex items-center justify-center p-4 mech-cursor">
       <div className="max-w-2xl w-full">
+        {/* Animated Mech Decorations */}
+        <div className="flex justify-center gap-8 mb-6">
+          <div className="mech-icon w-20 h-20 mech-spotlight opacity-70">
+            <img src="/images/atlas.gif" alt="Atlas" className="max-w-full max-h-full object-contain mech-animated" />
+          </div>
+          <div className="mech-icon w-24 h-24 mech-spotlight">
+            <img src="/images/madcat.gif" alt="Mad Cat" className="max-w-full max-h-full object-contain mech-animated" />
+          </div>
+          <div className="mech-icon w-20 h-20 mech-spotlight opacity-70">
+            <img src="/images/thor.gif" alt="Thor" className="max-w-full max-h-full object-contain mech-animated" />
+          </div>
+        </div>
+        
         <div className="text-center mb-12 animate-fade-in">
+<<<<<<< HEAD
           <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent" style={{ fontFamily: "'Battletech', 'HeavyMetal1', sans-serif", letterSpacing: '0.15em' }}>
             BATTLETECH
           </h1>
           <p className="text-xl text-gray-400" style={{ fontFamily: "'Battletech', 'HeavyMetal1', sans-serif" }}>Tactical Simulator</p>
+=======
+          <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent battletech-logo">
+            BATTLETECH
+          </h1>
+          <p className="text-xl text-gray-400 mech-label">Tactical Simulator</p>
+>>>>>>> d99c178eeeaf6bfa7f8be31f7c0dc1227c6e6692
         </div>
         
         <div className="grid gap-4">
           <Button
             onClick={onSinglePlayer}
-            className="h-20 text-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 shadow-lg shadow-blue-500/20"
+            className="h-20 text-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 shadow-lg shadow-blue-500/20 battletech-title"
             data-testid="singleplayer-btn"
           >
             <Swords className="w-6 h-6 mr-3" />
@@ -32,7 +52,7 @@ export function MainMenu({ onSinglePlayer, onCampaign, onHotseat, onNetworkPlay,
           
           <Button
             onClick={onCampaign}
-            className="h-20 text-lg bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 shadow-lg shadow-purple-500/20"
+            className="h-20 text-lg bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 shadow-lg shadow-purple-500/20 battletech-title"
             data-testid="campaign-btn"
           >
             <BookOpen className="w-6 h-6 mr-3" />
@@ -41,7 +61,7 @@ export function MainMenu({ onSinglePlayer, onCampaign, onHotseat, onNetworkPlay,
           
           <Button
             onClick={onHotseat}
-            className="h-20 text-lg bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 shadow-lg shadow-green-500/20"
+            className="h-20 text-lg bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 shadow-lg shadow-green-500/20 battletech-title"
             data-testid="hotseat-btn"
           >
             <Users className="w-6 h-6 mr-3" />
@@ -50,7 +70,7 @@ export function MainMenu({ onSinglePlayer, onCampaign, onHotseat, onNetworkPlay,
           
           <Button
             onClick={onNetworkPlay}
-            className="h-20 text-lg bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-500 hover:to-cyan-600 shadow-lg shadow-cyan-500/20"
+            className="h-20 text-lg bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-500 hover:to-cyan-600 shadow-lg shadow-cyan-500/20 battletech-title"
             data-testid="network-btn"
           >
             <Wifi className="w-6 h-6 mr-3" />
@@ -59,7 +79,7 @@ export function MainMenu({ onSinglePlayer, onCampaign, onHotseat, onNetworkPlay,
           
           <Button
             onClick={onMechLab}
-            className="h-20 text-lg bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-500 hover:to-orange-600 shadow-lg shadow-orange-500/20"
+            className="h-20 text-lg bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-500 hover:to-orange-600 shadow-lg shadow-orange-500/20 battletech-title"
             data-testid="mechlab-btn"
           >
             <Gamepad2 className="w-6 h-6 mr-3" />
@@ -68,7 +88,23 @@ export function MainMenu({ onSinglePlayer, onCampaign, onHotseat, onNetworkPlay,
         </div>
         
         <div className="mt-8 text-center text-sm text-gray-500">
-          <p>Use keyboard shortcuts: Ctrl+S (Save) | Ctrl+L (Load) | Space (Next Phase)</p>
+          <p className="mech-label">Use keyboard shortcuts: Ctrl+S (Save) | Ctrl+L (Load) | Space (Next Phase)</p>
+        </div>
+        
+        {/* Bottom Mech Decoration */}
+        <div className="flex justify-center gap-4 mt-8 opacity-50">
+          <div className="mech-icon w-12 h-12">
+            <img src="/images/hunchback_icon.gif" alt="Hunchback" className="max-w-full max-h-full object-contain" />
+          </div>
+          <div className="mech-icon w-12 h-12">
+            <img src="/images/catapult_icon.gif" alt="Catapult" className="max-w-full max-h-full object-contain" />
+          </div>
+          <div className="mech-icon w-12 h-12">
+            <img src="/images/vulture_icon.gif" alt="Vulture" className="max-w-full max-h-full object-contain" />
+          </div>
+          <div className="mech-icon w-12 h-12">
+            <img src="/images/loki_icon.gif" alt="Loki" className="max-w-full max-h-full object-contain" />
+          </div>
         </div>
       </div>
     </div>

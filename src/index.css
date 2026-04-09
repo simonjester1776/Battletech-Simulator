@@ -2,6 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
+<<<<<<< HEAD
 /* BattleTech Fonts */
 @font-face {
   font-family: 'Battletech';
@@ -11,16 +12,30 @@
 @font-face {
   font-family: 'HeavyMetal1';
   src: url('/fonts/Hvymtl1.ttf') format('truetype');
+=======
+/* BattleTech Custom Fonts */
+@font-face {
+  font-family: 'HeavyMetal';
+  src: url('/fonts/Hvymtl1.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+>>>>>>> d99c178eeeaf6bfa7f8be31f7c0dc1227c6e6692
 }
 
 @font-face {
   font-family: 'HeavyMetal2';
   src: url('/fonts/Hvymtl2.ttf') format('truetype');
+<<<<<<< HEAD
+=======
+  font-weight: normal;
+  font-style: normal;
+>>>>>>> d99c178eeeaf6bfa7f8be31f7c0dc1227c6e6692
 }
 
 @font-face {
   font-family: 'HeavyMetal5';
   src: url('/fonts/HVYMTL5.TTF') format('truetype');
+<<<<<<< HEAD
 }
 
 /* Custom Cursors */
@@ -66,6 +81,17 @@
 
 .cursor-erlking {
   cursor: url('/cursors/ERLARG~1.CUR'), auto;
+=======
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'BTLogo';
+  src: url('/fonts/BTLogo_old.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+>>>>>>> d99c178eeeaf6bfa7f8be31f7c0dc1227c6e6692
 }
 
 @layer base {
@@ -114,6 +140,27 @@
     @apply bg-background text-foreground antialiased;
     font-family: 'Battletech', system-ui, -apple-system, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
+    cursor: url('/cursors/madcat.ani'), url('/images/madcat_icon.gif'), crosshair;
+  }
+  
+  /* BattleTech themed elements get custom cursors */
+  .mech-cursor {
+    cursor: url('/images/madcat_icon.gif'), crosshair;
+  }
+  
+  /* Title styling with HeavyMetal font */
+  .battletech-title {
+    font-family: 'HeavyMetal', 'Arial Black', sans-serif;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  
+  .battletech-logo {
+    font-family: 'BTLogo', 'HeavyMetal', 'Arial Black', sans-serif;
+  }
+  
+  .mech-label {
+    font-family: 'HeavyMetal2', 'Arial', sans-serif;
   }
   
   .hvymtl1 {
@@ -223,5 +270,61 @@
   
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+  
+  /* Mech icon container */
+  .mech-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.8) 0%, rgba(30, 30, 50, 0.8) 100%);
+    border: 2px solid rgba(100, 150, 255, 0.3);
+    border-radius: 4px;
+    padding: 4px;
+    transition: all 0.3s ease;
+  }
+  
+  .mech-icon:hover {
+    border-color: rgba(100, 150, 255, 0.6);
+    box-shadow: 0 0 12px rgba(100, 150, 255, 0.4);
+    transform: scale(1.05);
+  }
+  
+  .mech-icon img {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
+  
+  /* Animated mech spotlight */
+  .mech-spotlight {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .mech-spotlight::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(100, 150, 255, 0.1) 0%, transparent 50%);
+    animation: spotlight-rotate 8s linear infinite;
+  }
+  
+  @keyframes spotlight-rotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  /* Mech walking animation for GIFs */
+  .mech-animated {
+    animation: mech-bob 1s ease-in-out infinite;
+  }
+  
+  @keyframes mech-bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
   }
 }
