@@ -1104,27 +1104,7 @@ import {
   createWarhawk
 } from './mechs-heavy-clan';
 
-// Import vehicles
-import {
-  createScorpion,
-  createVedette,
-  createRommel,
-  createDemolisher,
-  createStriker
-} from './vehicles';
-
-// Import aerospace fighters
-import { allAerospaceFighters } from './aerospace';
-import {
-  createElemental,
-  createStandardBA,
-  createSalamander,
-  createLonginus,
-  createSylph,
-  createInfiltrator
-} from './battle-armor';
-
-// Get all available units (Mechs + Vehicles)
+// Get all available Mechs
 export function getAllUnits(): Unit[] {
   return [
     // Light Mechs (20-35 tons)
@@ -1132,6 +1112,7 @@ export function getAllUnits(): Unit[] {
     createCougar(),
     createFirestarter(),
     createJagermech(),
+    createJenner(),
     createRaven(),
     createUller(),
     
@@ -1142,54 +1123,24 @@ export function getAllUnits(): Unit[] {
     createHollander(),
     
     // Heavy Mechs (60-75 tons)
+    createWarhammer(),
     createLoki(),
     createThor(),
     
-    // Clan Mechs
+    // Clan Mechs & Heavy Assault
+    createTimberWolf(),
     createMadDog(),
     createWarhawk(),
     
     // Assault Mechs (80-100 tons)
     createAwesome(),
-    createAtlasD(),
-    
-    // Aerospace Fighters (with available images)
-    ...(allAerospaceFighters.filter(aero => 
-      aero.id === 'vulture' // Only include aerospace fighters with images
-    ) as Unit[])
+    createAtlasD()
   ];
 }
 
-// Get vehicles only
-export function getAllVehicles(): Unit[] {
-  return [
-    createScorpion(),
-    createStriker(),
-    createVedette(),
-    createRommel(),
-    createDemolisher()
-  ];
-}
-
-// Get battle armor only
-export function getAllBattleArmor(): Unit[] {
-  return [
-    createStandardBA(),
-    createElemental(),
-    createSalamander(),
-    createLonginus(),
-    createSylph(),
-    createInfiltrator()
-  ];
-}
-
-// Get all units including vehicles and battle armor
+// Get all units (Mechs only)
 export function getAllUnitsAndVehicles(): Unit[] {
-  return [
-    ...getAllUnits(),
-    ...getAllVehicles(),
-    ...getAllBattleArmor()
-  ];
+  return getAllUnits();
 }
 
 // Create a copy of a unit with new ID

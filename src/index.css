@@ -2,40 +2,47 @@
 @tailwind components;
 @tailwind utilities;
 
-<<<<<<< HEAD
-/* BattleTech Fonts */
+/* BattleTech Custom Fonts */
 @font-face {
   font-family: 'Battletech';
   src: url('/fonts/BTLogo_old.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
 }
 
-@font-face {
-  font-family: 'HeavyMetal1';
-  src: url('/fonts/Hvymtl1.ttf') format('truetype');
-=======
-/* BattleTech Custom Fonts */
 @font-face {
   font-family: 'HeavyMetal';
   src: url('/fonts/Hvymtl1.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
->>>>>>> d99c178eeeaf6bfa7f8be31f7c0dc1227c6e6692
+}
+
+@font-face {
+  font-family: 'HeavyMetal1';
+  src: url('/fonts/Hvymtl1.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
 }
 
 @font-face {
   font-family: 'HeavyMetal2';
   src: url('/fonts/Hvymtl2.ttf') format('truetype');
-<<<<<<< HEAD
-=======
   font-weight: normal;
   font-style: normal;
->>>>>>> d99c178eeeaf6bfa7f8be31f7c0dc1227c6e6692
 }
 
 @font-face {
   font-family: 'HeavyMetal5';
   src: url('/fonts/HVYMTL5.TTF') format('truetype');
-<<<<<<< HEAD
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'BTLogo';
+  src: url('/fonts/BTLogo_old.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
 }
 
 /* Custom Cursors */
@@ -81,17 +88,6 @@
 
 .cursor-erlking {
   cursor: url('/cursors/ERLARG~1.CUR'), auto;
-=======
-  font-weight: normal;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: 'BTLogo';
-  src: url('/fonts/BTLogo_old.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
->>>>>>> d99c178eeeaf6bfa7f8be31f7c0dc1227c6e6692
 }
 
 @layer base {
@@ -140,7 +136,7 @@
     @apply bg-background text-foreground antialiased;
     font-family: 'Battletech', system-ui, -apple-system, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
-    cursor: url('/cursors/madcat.ani'), url('/images/madcat_icon.gif'), crosshair;
+    cursor: url('/cursors/madcat/madcat.ani'), pointer;
   }
   
   /* BattleTech themed elements get custom cursors */

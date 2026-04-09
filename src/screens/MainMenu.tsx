@@ -27,17 +27,10 @@ export function MainMenu({ onSinglePlayer, onCampaign, onHotseat, onNetworkPlay,
         </div>
         
         <div className="text-center mb-12 animate-fade-in">
-<<<<<<< HEAD
-          <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent" style={{ fontFamily: "'Battletech', 'HeavyMetal1', sans-serif", letterSpacing: '0.15em' }}>
-            BATTLETECH
-          </h1>
-          <p className="text-xl text-gray-400" style={{ fontFamily: "'Battletech', 'HeavyMetal1', sans-serif" }}>Tactical Simulator</p>
-=======
           <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent battletech-logo">
             BATTLETECH
           </h1>
           <p className="text-xl text-gray-400 mech-label">Tactical Simulator</p>
->>>>>>> d99c178eeeaf6bfa7f8be31f7c0dc1227c6e6692
         </div>
         
         <div className="grid gap-4">

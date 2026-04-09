@@ -21,7 +21,7 @@ interface CampaignScreenProps {
 }
 
 export function CampaignScreen({ campaignManager, onStartMission, onBack }: CampaignScreenProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'pilots' | 'mechs' | 'contracts' | 'salvage'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'pilots' | 'mechs' | 'contracts'>('overview');
   const [availableContracts] = useState<Contract[]>(campaignManager.generateContracts(5));
   
   const company = campaignManager.getCompany();
@@ -30,9 +30,19 @@ export function CampaignScreen({ campaignManager, onStartMission, onBack }: Camp
     { id: 'overview', label: 'Overview', icon: Shield },
     { id: 'pilots', label: 'Pilots', icon: Users },
     { id: 'mechs', label: 'Mech Bay', icon: Wrench },
-    { id: 'contracts', label: 'Contracts', icon: FileText },
-    { id: 'salvage', label: 'Salvage', icon: Award }
+    { id: 'contracts', label: 'Contracts', icon: FileText }
   ];
+  
+  if (!company) {
+    return (
+      <div className="min-h-screen bg-gray-950 text-white p-6 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-400 mb-4">Error loading campaign</p>
+          <Button onClick={onBack}>Back to Main Menu</Button>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen bg-gray-950 text-white p-6">
@@ -70,14 +80,14 @@ export function CampaignScreen({ campaignManager, onStartMission, onBack }: Camp
                 <Users className="w-4 h-4" />
                 <span className="text-xs">Pilots</span>
               </div>
-              <p className="text-xl font-bold">{company.pilots.length}</p>
+              <p className="text-xl font-bold">{company.pilots?.length || 0}</p>
             </div>
             <div className="bg-gray-900 border border-gray-700 rounded-lg p-4">
               <div className="flex items-center gap-2 text-red-400 mb-1">
                 <Wrench className="w-4 h-4" />
                 <span className="text-xs">Mechs</span>
               </div>
-              <p className="text-xl font-bold">{company.mechBays.length}</p>
+              <p className="text-xl font-bold">{company.mechs?.length || 0}</p>
             </div>
           </div>
         </header>
@@ -109,18 +119,13 @@ export function CampaignScreen({ campaignManager, onStartMission, onBack }: Camp
         <div className="bg-gray-900 border border-gray-700 rounded-lg p-6">
           {activeTab === 'overview' && <OverviewTab company={company} />}
           {activeTab === 'pilots' && <PilotsTab company={company} />}
-          {activeTab === 'mechs' && <MechsTab company={company} manager={campaignManager} />}
+          {activeTab === 'mechs' && <MechsTab company={company} />}
           {activeTab === 'contracts' && (
             <ContractsTab 
               contracts={availableContracts}
-              currentContract={company.currentContract}
-              onAccept={(contract) => {
-                campaignManager.acceptContract(contract);
-                onStartMission(contract);
-              }}
+              onAccept={(contract) => onStartMission(contract)}
             />
           )}
-          {activeTab === 'salvage' && <SalvageTab company={company} manager={campaignManager} />}
         </div>
       </div>
     </div>
@@ -137,30 +142,31 @@ function OverviewTab({ company }: { company: MercenaryCompany }) {
           <h3 className="text-lg font-semibold mb-2 text-blue-400">Statistics</h3>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-400">Missions Completed:</span>
-              <span className="font-bold">{company.completedMissions}</span>
+              <span className="text-gray-400">Contracts Available:</span>
+              <span className="font-bold">{company.contracts?.length || 0}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Active Contract:</span>
-              <span className="font-bold">{company.currentContract ? company.currentContract.title : 'None'}</span>
+              <span className="text-gray-400">Pilots:</span>
+              <span className="font-bold">{company.pilots?.length || 0}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Available Pilots:</span>
-              <span className="font-bold">{company.pilots.length}</span>
+              <span className="text-gray-400">Mechs:</span>
+              <span className="font-bold">{company.mechs?.length || 0}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Operational Mechs:</span>
-              <span className="font-bold">{company.mechBays.filter(b => b.condition >= 80).length}/{company.mechBays.length}</span>
+              <span className="text-gray-400">Total Funds:</span>
+              <span className="font-bold text-green-400">{company.funds.toLocaleString()}</span>
             </div>
           </div>
         </div>
         
         <div>
-          <h3 className="text-lg font-semibold mb-2 text-blue-400">Recent Activity</h3>
+          <h3 className="text-lg font-semibold mb-2 text-blue-400">Company Info</h3>
           <div className="text-sm text-gray-400">
-            <p>• Company established {new Date(company.dateEstablished).toLocaleDateString()}</p>
-            <p>• Current funds: {company.funds.toLocaleString()} C-Bills</p>
-            <p>• Reputation level: {company.reputation >= 75 ? 'Excellent' : company.reputation >= 50 ? 'Good' : company.reputation >= 25 ? 'Average' : 'Poor'}</p>
+            <p>• Company Name: <span className="text-white font-bold">{company.name}</span></p>
+            <p>• Current Funds: <span className="text-green-400 font-bold">{company.funds.toLocaleString()} C-Bills</span></p>
+            <p>• Reputation: <span className="text-blue-400 font-bold">{company.reputation}/100</span></p>
+            <p>• Status: {company.reputation >= 75 ? 'Excellent' : company.reputation >= 50 ? 'Good' : company.reputation >= 25 ? 'Average' : 'Poor'}</p>
           </div>
         </div>
       </div>
@@ -172,206 +178,146 @@ function PilotsTab({ company }: { company: MercenaryCompany }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold">Pilot Roster</h2>
+        <h2 className="text-xl font-bold">Pilot Roster ({company.pilots?.length || 0})</h2>
         <Button size="sm" data-testid="hire-pilot-btn">Hire Pilot</Button>
       </div>
       
-      <div className="grid gap-4">
-        {company.pilots.map(pilot => (
-          <div key={pilot.id} className="bg-gray-800 border border-gray-700 rounded-lg p-4" data-testid={`pilot-${pilot.id}`}>
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="font-bold text-lg">{pilot.name}</h3>
-                <p className="text-sm text-blue-400">{pilot.callsign}</p>
-              </div>
-              <div className="text-right text-sm">
-                <p className="text-green-400">{pilot.salary.toLocaleString()} C-Bills/month</p>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-4 gap-4 mt-3 text-sm">
-              <div>
-                <span className="text-gray-400">Gunnery:</span>
-                <span className="ml-2 font-bold">{pilot.gunnery}</span>
-              </div>
-              <div>
-                <span className="text-gray-400">Piloting:</span>
-                <span className="ml-2 font-bold">{pilot.piloting}</span>
-              </div>
-              <div>
-                <span className="text-gray-400">XP:</span>
-                <span className="ml-2 font-bold">{pilot.experience}</span>
-              </div>
-              <div>
-                <span className="text-gray-400">Kills:</span>
-                <span className="ml-2 font-bold">{pilot.kills}</span>
-              </div>
-            </div>
-            
-            {pilot.specialAbilities.length > 0 && (
-              <div className="mt-2">
-                <span className="text-xs text-gray-400">Abilities:</span>
-                <div className="flex gap-1 mt-1">
-                  {pilot.specialAbilities.map(ability => (
-                    <span key={ability} className="text-xs bg-blue-900 text-blue-300 px-2 py-1 rounded">
-                      {ability.replace('_', ' ')}
-                    </span>
-                  ))}
+      {company.pilots && company.pilots.length > 0 ? (
+        <div className="grid gap-4">
+          {company.pilots.map(pilot => (
+            <div key={pilot.id} className="bg-gray-800 border border-gray-700 rounded-lg p-4" data-testid={`pilot-${pilot.id}`}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="font-bold text-lg">{pilot.name}</h3>
+                  <p className="text-sm text-blue-400">{pilot.rank}</p>
                 </div>
               </div>
-            )}
-          </div>
-        ))}
-      </div>
+              
+              <div className="grid grid-cols-4 gap-4 mt-3 text-sm">
+                <div>
+                  <span className="text-gray-400">Gunnery:</span>
+                  <span className="ml-2 font-bold">{pilot.gunnery}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">Piloting:</span>
+                  <span className="ml-2 font-bold">{pilot.piloting}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">Rank:</span>
+                  <span className="ml-2 font-bold">{pilot.rank}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">XP:</span>
+                  <span className="ml-2 font-bold">{pilot.experience}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-gray-400 text-center py-8">No pilots hired yet</p>
+      )}
     </div>
   );
 }
 
-function MechsTab({ company, manager }: { company: MercenaryCompany; manager: CampaignManager }) {
+function MechsTab({ company }: { company: MercenaryCompany }) {
   return (
     <div>
-      <h2 className="text-xl font-bold mb-4">Mech Bay</h2>
+      <h2 className="text-xl font-bold mb-4">Mech Bay ({company.mechs?.length || 0})</h2>
       
-      <div className="grid gap-4">
-        {company.mechBays.map((bay, index) => (
-          <div key={index} className="bg-gray-800 border border-gray-700 rounded-lg p-4" data-testid={`mechbay-${index}`}>
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="font-bold text-lg">{bay.mech.name}</h3>
-                <p className="text-sm text-gray-400">{bay.mech.tonnage} tons | BV: {bay.mech.bv2}</p>
-              </div>
-              <div className="text-right">
-                <div className={cn(
-                  "text-sm font-bold",
-                  bay.condition >= 80 ? "text-green-400" :
-                  bay.condition >= 50 ? "text-yellow-400" :
-                  "text-red-400"
-                )}>
-                  {bay.condition}% Condition
+      {company.mechs && company.mechs.length > 0 ? (
+        <div className="grid gap-4">
+          {company.mechs.map((mech, index) => (
+            <div key={mech.id} className="bg-gray-800 border border-gray-700 rounded-lg p-4" data-testid={`mech-${index}`}>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h3 className="font-bold text-lg">{mech.name}</h3>
+                  <p className="text-sm text-gray-400">{mech.tonnage} tons</p>
                 </div>
-                {bay.condition < 100 && (
-                  <Button 
-                    size="sm" 
-                    className="mt-2"
-                    onClick={() => manager.repairMech(index)}
-                    disabled={company.funds < bay.repairCost}
-                    data-testid={`repair-mech-${index}`}
-                  >
-                    Repair ({bay.repairCost.toLocaleString()} C-Bills)
-                  </Button>
-                )}
+              </div>
+              
+              <div className="grid grid-cols-4 gap-4 mt-3 text-sm">
+                <div>
+                  <span className="text-gray-400">Armor:</span>
+                  <p className="font-bold">{mech.armor}/{mech.maxArmor}</p>
+                </div>
+                <div>
+                  <span className="text-gray-400">Internal:</span>
+                  <p className="font-bold">{mech.internals}/{mech.maxInternals}</p>
+                </div>
+                <div>
+                  <span className="text-gray-400">Heat Sinks:</span>
+                  <p className="font-bold">{mech.heatSinks}</p>
+                </div>
+                <div>
+                  <span className="text-gray-400">Weapons:</span>
+                  <p className="font-bold">{mech.weapons.length}</p>
+                </div>
               </div>
             </div>
-            
-            <div className="mt-3 text-sm">
-              <span className="text-gray-400">Assigned Pilot:</span>
-              <span className="ml-2">
-                {bay.assignedPilot 
-                  ? company.pilots.find(p => p.id === bay.assignedPilot)?.name || 'Unknown'
-                  : 'Unassigned'}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-gray-400 text-center py-8">No mechs in bay</p>
+      )}
     </div>
   );
 }
 
 function ContractsTab({ 
   contracts, 
-  currentContract, 
   onAccept 
 }: { 
-  contracts: Contract[]; 
-  currentContract: Contract | null;
+  contracts: Contract[];
   onAccept: (contract: Contract) => void;
 }) {
   return (
     <div>
-      <h2 className="text-xl font-bold mb-4">Available Contracts</h2>
+      <h2 className="text-xl font-bold mb-4">Available Contracts ({contracts.length})</h2>
       
-      {currentContract && (
-        <div className="bg-blue-900/30 border border-blue-500 rounded-lg p-4 mb-6">
-          <p className="text-sm text-blue-300 mb-1">ACTIVE CONTRACT</p>
-          <h3 className="font-bold text-lg">{currentContract.title}</h3>
-          <p className="text-sm text-gray-400">{currentContract.employer}</p>
-        </div>
-      )}
-      
-      <div className="grid gap-4">
-        {contracts.map(contract => (
-          <div key={contract.id} className="bg-gray-800 border border-gray-700 rounded-lg p-4" data-testid={`contract-${contract.id}`}>
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="font-bold text-lg">{contract.title}</h3>
-                <p className="text-sm text-gray-400">{contract.employer}</p>
-                <p className="text-xs text-gray-500 mt-1">{contract.description}</p>
-              </div>
-              <Button 
-                onClick={() => onAccept(contract)}
-                disabled={!!currentContract}
-                data-testid={`accept-contract-${contract.id}`}
-              >
-                Accept
-              </Button>
-            </div>
-            
-            <div className="grid grid-cols-4 gap-4 mt-4 text-sm">
-              <div>
-                <span className="text-gray-400">Payment:</span>
-                <p className="font-bold text-green-400">{contract.payment.toLocaleString()} C-Bills</p>
-              </div>
-              <div>
-                <span className="text-gray-400">Difficulty:</span>
-                <p className="font-bold">{contract.difficulty}/10</p>
-              </div>
-              <div>
-                <span className="text-gray-400">Salvage:</span>
-                <p className="font-bold">{contract.salvageRights}%</p>
-              </div>
-              <div>
-                <span className="text-gray-400">Duration:</span>
-                <p className="font-bold">{contract.duration} days</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SalvageTab({ company, manager }: { company: MercenaryCompany; manager: CampaignManager }) {
-  return (
-    <div>
-      <h2 className="text-xl font-bold mb-4">Salvage Yard</h2>
-      
-      {company.salvage.length === 0 ? (
-        <p className="text-gray-400 text-center py-8">No salvage available</p>
-      ) : (
+      {contracts.length > 0 ? (
         <div className="grid gap-4">
-          {company.salvage.map(item => (
-            <div key={item.id} className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex items-center justify-between" data-testid={`salvage-${item.id}`}>
-              <div>
-                <h3 className="font-bold">{item.name}</h3>
-                <p className="text-sm text-gray-400">{item.description}</p>
-                <p className="text-xs text-gray-500 mt-1">Condition: {item.condition}%</p>
-              </div>
-              <div className="text-right">
-                <p className="text-green-400 font-bold">{item.value.toLocaleString()} C-Bills</p>
+          {contracts.map(contract => (
+            <div key={contract.id} className="bg-gray-800 border border-gray-700 rounded-lg p-4" data-testid={`contract-${contract.id}`}>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h3 className="font-bold text-lg">{contract.name}</h3>
+                  <p className="text-sm text-gray-400">{contract.employer}</p>
+                  <p className="text-xs text-gray-500 mt-1">{contract.description}</p>
+                </div>
                 <Button 
-                  size="sm" 
-                  className="mt-2"
-                  onClick={() => manager.sellSalvage(item.id)}
-                  data-testid={`sell-salvage-${item.id}`}
+                  onClick={() => onAccept(contract)}
+                  data-testid={`accept-contract-${contract.id}`}
+                  className="ml-4"
                 >
-                  Sell
+                  Accept
                 </Button>
+              </div>
+              
+              <div className="grid grid-cols-4 gap-4 mt-4 text-sm">
+                <div>
+                  <span className="text-gray-400">Reward:</span>
+                  <p className="font-bold text-green-400">{contract.reward.toLocaleString()} C-Bills</p>
+                </div>
+                <div>
+                  <span className="text-gray-400">Difficulty:</span>
+                  <p className="font-bold">{contract.difficulty}/5</p>
+                </div>
+                <div>
+                  <span className="text-gray-400">Faction:</span>
+                  <p className="font-bold">{contract.faction}</p>
+                </div>
+                <div>
+                  <span className="text-gray-400">Location:</span>
+                  <p className="font-bold">{contract.location}</p>
+                </div>
               </div>
             </div>
           ))}
         </div>
+      ) : (
+        <p className="text-gray-400 text-center py-8">No contracts available</p>
       )}
     </div>
   );
