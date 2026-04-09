@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Swords, Users, BookOpen, Gamepad2, Wifi } from 'lucide-react';
+import { MidiPlayer } from '@/components/MidiPlayer';
 
 interface MainMenuProps {
   onSinglePlayer: () => void;
@@ -80,7 +81,11 @@ export function MainMenu({ onSinglePlayer, onCampaign, onHotseat, onNetworkPlay,
           </Button>
         </div>
         
-        <div className="mt-8 text-center text-sm text-gray-500">
+        <div className="mt-6 mb-8">
+          <MidiPlayer category="menu" autoPlay={true} />
+        </div>
+        
+        <div className="mt-4 text-center text-sm text-gray-500">
           <p className="mech-label">Use keyboard shortcuts: Ctrl+S (Save) | Ctrl+L (Load) | Space (Next Phase)</p>
         </div>
         

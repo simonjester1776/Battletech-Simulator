@@ -1,9 +1,12 @@
 // Campaign Management UI
 
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { MercenaryCompany, Contract } from '@/lib/campaign';
 import { CampaignManager } from '@/lib/campaign';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { MidiPlayer } from '@/components/MidiPlayer';
+import { useAudioManager } from '@/hooks/useAudioManager';
 import { cn } from '@/lib/utils';
 import { 
   Users, 
@@ -11,8 +14,20 @@ import {
   DollarSign, 
   Award,
   Shield,
-  FileText
+  FileText,
+  Plus
 } from 'lucide-react';
+
+const PILOT_POOL = [
+  { name: 'Alex "Striker" Carson', gunnery: 3, piloting: 4 },
+  { name: 'Jamie "Razor" Kovalski', gunnery: 4, piloting: 3 },
+  { name: 'Morgan "Steel" Chen', gunnery: 3, piloting: 3 },
+  { name: 'Devon "Hawk" Matthews', gunnery: 2, piloting: 4 },
+  { name: 'Taylor "Blaze" Rodriguez', gunnery: 4, piloting: 4 },
+  { name: 'Casey "Pulse" Anderson', gunnery: 3, piloting: 5 },
+  { name: 'Blake "Viper" Thompson', gunnery: 2, piloting: 3 },
+  { name: 'Jordan "Ghost" Williams', gunnery: 4, piloting: 2 },
+];
 
 interface CampaignScreenProps {
   campaignManager: CampaignManager;
@@ -23,8 +38,30 @@ interface CampaignScreenProps {
 export function CampaignScreen({ campaignManager, onStartMission, onBack }: CampaignScreenProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'pilots' | 'mechs' | 'contracts'>('overview');
   const [availableContracts] = useState<Contract[]>(campaignManager.generateContracts(5));
+  const [showHirePilot, setShowHirePilot] = useState(false);
+  const [company, setCompany] = useState(campaignManager.getCompany());
   
-  const company = campaignManager.getCompany();
+  const availablePilots = useMemo(() => {
+    const currentPilotNames = new Set(company?.pilots?.map(p => p.name) || []);
+    return PILOT_POOL.filter(p => !currentPilotNames.has(p.name));
+  }, [company]);
+  
+  const handleHirePilot = (pilot: typeof PILOT_POOL[0]) => {
+    if (!company || (company.funds || 0) < 50000) return;
+    
+    campaignManager.addPilot({
+      id: `pilot-${Date.now()}`,
+      name: pilot.name,
+      gunnery: pilot.gunnery,
+      piloting: pilot.piloting,
+      hits: 0,
+      conscious: true,
+      rank: 'Recruit'
+    });
+    campaignManager.addFunds(-50000);
+    setCompany(campaignManager.getCompany());
+    setShowHirePilot(false);
+  };
   
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Shield },
@@ -47,6 +84,11 @@ export function CampaignScreen({ campaignManager, onStartMission, onBack }: Camp
   return (
     <div className="min-h-screen bg-gray-950 text-white p-6">
       <div className="max-w-7xl mx-auto">
+        {/* MIDI Player */}
+        <div className="mb-4">
+          <MidiPlayer category="campaign" autoPlay={true} />
+        </div>
+        
         {/* Header */}
         <header className="mb-6">
           <div className="flex items-center justify-between">
@@ -118,7 +160,7 @@ export function CampaignScreen({ campaignManager, onStartMission, onBack }: Camp
         {/* Content */}
         <div className="bg-gray-900 border border-gray-700 rounded-lg p-6">
           {activeTab === 'overview' && <OverviewTab company={company} />}
-          {activeTab === 'pilots' && <PilotsTab company={company} />}
+          {activeTab === 'pilots' && <PilotsTab company={company} onHirePilot={() => setShowHirePilot(true)} />}
           {activeTab === 'mechs' && <MechsTab company={company} />}
           {activeTab === 'contracts' && (
             <ContractsTab 
@@ -127,6 +169,36 @@ export function CampaignScreen({ campaignManager, onStartMission, onBack }: Camp
             />
           )}
         </div>
+        
+        {/* Hire Pilot Dialog */}
+        <Dialog open={showHirePilot} onOpenChange={setShowHirePilot}>
+          <DialogContent className="bg-gray-900 border-gray-700">
+            <DialogHeader>
+              <DialogTitle>Hire Pilot</DialogTitle>
+              <DialogDescription>
+                Select a pilot to hire. Cost: $50,000 per pilot.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {availablePilots.length > 0 ? (
+                availablePilots.map(pilot => (
+                  <div key={pilot.name} className="bg-gray-800 border border-gray-700 rounded p-3 hover:border-blue-500 cursor-pointer transition-colors"
+                    onClick={() => handleHirePilot(pilot)}>
+                    <p className="font-bold">{pilot.name}</p>
+                    <p className="text-xs text-gray-400">Gunnery: {pilot.gunnery} | Piloting: {pilot.piloting}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-400 text-center py-4">All available pilots have been hired!</p>
+              )}
+            </div>
+            
+            <DialogFooter>
+              <Button onClick={() => setShowHirePilot(false)} variant="outline">Cancel</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
@@ -174,12 +246,12 @@ function OverviewTab({ company }: { company: MercenaryCompany }) {
   );
 }
 
-function PilotsTab({ company }: { company: MercenaryCompany }) {
+function PilotsTab({ company, onHirePilot }: { company: MercenaryCompany; onHirePilot?: () => void }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold">Pilot Roster ({company.pilots?.length || 0})</h2>
-        <Button size="sm" data-testid="hire-pilot-btn">Hire Pilot</Button>
+        <Button size="sm" onClick={onHirePilot} data-testid="hire-pilot-btn"><Plus className="w-4 h-4 mr-2" /> Hire Pilot</Button>
       </div>
       
       {company.pilots && company.pilots.length > 0 ? (

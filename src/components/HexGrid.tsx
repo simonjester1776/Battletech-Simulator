@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import type { HexCoord, Hex, Unit } from '@/types/battletech';
 import { TerrainType } from '@/types/battletech';
 import { hexToPixel, getHexKey, TERRAIN_TYPES } from '@/engine/hexgrid';
+import { getMechIcon } from '@/lib/mech-images';
 import { cn } from '@/lib/utils';
 
 interface HexGridProps {
@@ -30,38 +31,9 @@ function getTerrainColor(terrain: TerrainType): string {
   }
 }
 
-// Get mech image path
+// Get mech image path using centralized library
 function getMechImage(unit: Unit): string {
-  const nameMap: { [key: string]: string } = {
-    'AS7-D Atlas': 'atlas',
-    'Awesome': 'awesome',
-    'Catapult': 'catapult',
-    'Centurion': 'centurion',
-    'COM-2D Commando': 'commando',
-    'Cougar A': 'cougar',
-    'FS9-H Firestarter': 'firestarter',
-    'BZK-F3 Hollander': 'hollander',
-    'HBK-4G Hunchback': 'hunchback',
-    'HBK-2C Hunchback': 'hunchback2c',
-    'JM6-S Jagermech': 'jagermech',
-    'Loki S': 'loki',
-    'Mad Dog': 'madcat',
-    'Warhawk': 'masakari',
-    'RVN-3L Raven': 'raven',
-    'Thor A': 'thor',
-    'Uller A': 'uller',
-    'Vulture': 'vulture',
-    'Sparrowhawk': 'vulture', // Placeholder - no image
-    'Shilone': 'vulture', // Placeholder - no image
-    'Lucifer': 'vulture', // Placeholder - no image
-    'Thunderbird': 'vulture', // Placeholder - no image
-    'Corsair': 'vulture', // Placeholder - no image
-    'Chippewa CHP-W5': 'vulture', // Placeholder - no image
-    'Visigoth (Clan)': 'vulture' // Placeholder - no image
-  };
-  
-  const baseName = nameMap[unit.name] || unit.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return `/images/${baseName}.gif`;
+  return getMechIcon(unit.name);
 }
 
 // Single Hex Component

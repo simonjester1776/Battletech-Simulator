@@ -141,7 +141,7 @@
   
   /* BattleTech themed elements get custom cursors */
   .mech-cursor {
-    cursor: url('/images/madcat_icon.gif'), crosshair;
+    cursor: url('/cursors/madcat/madcat.ani'), pointer;
   }
   
   /* Title styling with HeavyMetal font */

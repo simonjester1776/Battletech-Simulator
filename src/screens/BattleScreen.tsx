@@ -7,6 +7,7 @@ import { GameLog } from '@/components/GameLog';
 import { ControlPanel } from '@/components/ControlPanel';
 import { ObjectivesOverlay } from '@/components/ObjectivesOverlay';
 import { Button } from '@/components/ui/button';
+import { MidiPlayer } from '@/components/MidiPlayer';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -140,6 +141,11 @@ export function BattleScreen({
   return (
     <div className="min-h-screen bg-gray-950 text-white hvymtl1">
       <div className="p-4">
+        {/* MIDI Player */}
+        <div className="mb-4">
+          <MidiPlayer category="battle" autoPlay={true} />
+        </div>
+        
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
