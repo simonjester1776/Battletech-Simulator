@@ -31,24 +31,41 @@ export function ObjectivesOverlay({ objectives }: ObjectivesOverlayProps) {
   return (
     <Card className="bg-gray-900/95 border-gray-700 p-3 backdrop-blur-sm">
       <h3 className="text-sm font-semibold mb-2 text-gray-300">Mission Objectives</h3>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {objectives.map((objective) => (
-          <div key={objective.id} className="flex items-center gap-2">
-            {getStatusIcon(objective.status)}
-            <span className="text-xs text-gray-300 flex-1 truncate">
-              {objective.title}
-            </span>
-            {objective.required && (
-              <Badge variant="destructive" className="text-xs px-1 py-0">
-                REQ
-              </Badge>
-            )}
-            {objective.turnsRemaining !== undefined && (
-              <div className="flex items-center gap-1">
-                <Clock className="w-3 h-3 text-yellow-500" />
-                <span className="text-xs text-gray-400">{objective.turnsRemaining}t</span>
-              </div>
-            )}
+          <div key={objective.id} className="rounded-md border border-gray-700 bg-slate-950/80 p-2">
+            <div className="flex items-center gap-2 mb-1">
+              {getStatusIcon(objective.status)}
+              <span className="text-xs text-gray-300 font-semibold flex-1">
+                {objective.title}
+              </span>
+              {objective.required && (
+                <Badge variant="destructive" className="text-xs px-1 py-0">
+                  REQ
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-2 text-[11px] text-gray-400 mb-2">
+              <span className="truncate">{objective.description}</span>
+              {objective.turnsRemaining !== undefined && (
+                <div className="flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-yellow-500" />
+                  <span>{objective.turnsRemaining}t</span>
+                </div>
+              )}
+            </div>
+            <div className="h-1 rounded-full bg-gray-800 overflow-hidden mb-2">
+              <div
+                className="h-full bg-emerald-500"
+                style={{ width: `${objective.progress}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-gray-400">
+              <span>{objective.progress}%</span>
+              <span>
+                {objective.reward.cbills.toLocaleString()} cbills • {objective.reward.salvage} salvage
+              </span>
+            </div>
           </div>
         ))}
       </div>

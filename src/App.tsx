@@ -24,7 +24,15 @@ import { getAllUnitsAndVehicles, cloneUnit } from '@/engine/units';
 import { CampaignManager } from '@/lib/campaign';
 import type { Contract } from '@/lib/campaign';
 import type { GameMode } from '@/lib/multiplayer';
-import { generateEliminationMission, type MissionObjective } from '@/lib/mission-objectives';
+import {
+  generateEliminationMission,
+  generateAssassinationMission,
+  generateDefenseMission,
+  generateCaptureMission,
+  generateEscortMission,
+  generateSurvivalMission,
+  type MissionObjective
+} from '@/lib/mission-objectives';
 
 import { MainMenu } from '@/screens/MainMenu';
 import { UnitSetup } from '@/screens/UnitSetup';
@@ -44,7 +52,7 @@ function App() {
   const [gameOver, setGameOver] = useState<{ gameOver: boolean; winner: 'player' | 'ai' | 'draw' | null } | null>(null);
   
   const [campaignManager, setCampaignManager] = useState<CampaignManager | null>(null);
-  const [currentContract] = useState<Contract | null>(null);
+  const [currentContract, setCurrentContract] = useState<Contract | null>(null);
   
   const initialUnits = getAllUnitsAndVehicles();
   const [availableUnits, setAvailableUnits] = useState<Unit[]>(initialUnits);
@@ -58,19 +66,81 @@ function App() {
     initialUnits.find(u => u.name.toLowerCase().includes('marauder'))?.id
   ].filter(Boolean) as string[]);
   
-  const [missionObjectives] = useState<MissionObjective[]>([
+  const [missionObjectives, setMissionObjectives] = useState<MissionObjective[]>([
     generateEliminationMission()
   ]);
+
+  const generateMissionObjectives = useCallback(
+    (playerUnits: Unit[], aiUnits: Unit[], contract?: Contract): MissionObjective[] => {
+      const extractionPoint = { q: 0, r: 0, s: 0 };
+      const captureZone = { q: 0, r: 0, s: 0 };
+      const primaryTarget = aiUnits[0];
+
+      if (contract) {
+        switch (contract.missionType) {
+          case 'elimination':
+            return [generateEliminationMission()];
+          case 'assassination':
+            return primaryTarget
+              ? [generateAssassinationMission(primaryTarget.name, primaryTarget.id)]
+              : [generateEliminationMission()];
+          case 'defense':
+            return [generateDefenseMission(4 + contract.difficulty * 2)];
+          case 'capture':
+            return [generateCaptureMission(captureZone, 2 + Math.ceil(contract.difficulty / 2))];
+          case 'escort':
+            return playerUnits.length > 0
+              ? [generateEscortMission(playerUnits[0].id, playerUnits[0].name, extractionPoint)]
+              : [generateDefenseMission(6)];
+          case 'survival':
+            return [generateSurvivalMission(6 + contract.difficulty * 2)];
+          default:
+            return [generateEliminationMission()];
+        }
+      }
+
+      const random = Math.random();
+      if (random < 0.15 || aiUnits.length === 0) {
+        return [generateEliminationMission()];
+      }
+
+      if (random < 0.35 && primaryTarget) {
+        return [generateAssassinationMission(primaryTarget.name, primaryTarget.id)];
+      }
+
+      if (random < 0.55) {
+        return [generateDefenseMission(6)];
+      }
+
+      if (random < 0.75) {
+        return [generateCaptureMission(captureZone, 2)];
+      }
+
+      if (random < 0.9 && playerUnits.length > 0) {
+        return [generateEscortMission(playerUnits[0].id, playerUnits[0].name, extractionPoint)];
+      }
+
+      return [generateSurvivalMission(8)];
+    },
+    []
+  );
   
   // Check game over condition
   useEffect(() => {
     if (gameState) {
       const result = checkGameOver(gameState);
-      if (result.gameOver) {
-        setGameOver(result);
-      }
+      setGameOver(result.gameOver ? result : null);
     }
   }, [gameState]);
+  
+  useEffect(() => {
+    if (!gameOver?.gameOver || !currentContract || !campaignManager) return;
+
+    const contractSuccess = gameOver.winner === 'player';
+    campaignManager.completeContract(currentContract.id, contractSuccess);
+    setCampaignManager(Object.assign(Object.create(Object.getPrototypeOf(campaignManager)), campaignManager));
+    setCurrentContract(null);
+  }, [gameOver, currentContract, campaignManager]);
   
   // Game initialization and management
   const startGame = useCallback(() => {
@@ -84,7 +154,9 @@ function App() {
       return template ? cloneUnit(template) : cloneUnit(availableUnits[1] || availableUnits[0]);
     });
     
-    const newGame = initializeGame(playerUnits, aiUnits);
+    const newObjectives = generateMissionObjectives(playerUnits, aiUnits, currentContract ?? undefined).map(objective => ({ ...objective }));
+    setMissionObjectives(newObjectives);
+    const newGame = initializeGame(playerUnits, aiUnits, newObjectives);
     setGameState(newGame);
     setCurrentScreen('game');
     setGameOver(null);
@@ -97,6 +169,7 @@ function App() {
     setGameState(null);
     setCurrentScreen('main-menu');
     setGameOver(null);
+    setCurrentContract(null);
   }, []);
   
   const startCampaign = useCallback(() => {
@@ -117,8 +190,8 @@ function App() {
     setCurrentScreen('campaign');
   }, [availableUnits]);
   
-  const startMission = useCallback((_contract: Contract) => {
-    // In future, set currentContract state when we need it
+  const startMission = useCallback((contract: Contract) => {
+    setCurrentContract(contract);
     setCurrentScreen('setup');
   }, []);
   
@@ -328,9 +401,13 @@ function App() {
         onDFAAttack={handleDFAAttack}
         onRestart={restartGame}
         onAIturn={handleAIturn}
-        onBack={() => setCurrentScreen('main-menu')}
+        onBack={() => {
+          setCurrentScreen('main-menu');
+          setCurrentContract(null);
+        }}
         gameOver={gameOver}
         objectives={missionObjectives}
+        contract={currentContract}
       />
     );
   }

@@ -1,5 +1,7 @@
 // BattleTech Types - Accurate to Classic CBT Rules
 
+import type { MissionObjective } from '@/lib/mission-objectives';
+
 export const UnitType = {
   MECH: 'mech',
   VEHICLE: 'vehicle',
@@ -41,7 +43,8 @@ export const WeaponType = {
   MISSILE: 'missile',
   FLAMER: 'flamer',
   MACHINE_GUN: 'machine_gun',
-  GAUSS: 'gauss'
+  GAUSS: 'gauss',
+  SUPPORT: 'support'
 } as const;
 export type WeaponType = typeof WeaponType[keyof typeof WeaponType];
 
@@ -202,6 +205,7 @@ export interface GameState {
   targetUnit: Unit | null;
   validMoveHexes: HexCoord[];
   validTargetHexes: HexCoord[];
+  objectives?: MissionObjective[];
   gameLog: LogEntry[];
   initiativeWinner: 'player' | 'ai' | null;
   playerScore: number;
@@ -236,6 +240,7 @@ export interface AttackResult {
   criticals: CriticalResult[];
   ammoExplosion: boolean;
   message: string;
+  fired?: boolean;
 }
 
 export interface CriticalResult {

@@ -124,16 +124,18 @@ async function parseMidiFile(filepath: string): Promise<ParsedMidi> {
             if (noteStack[note] && noteStack[note].length > 0) {
               // Pop from array (FIFO - match oldest note-on)
               const startTime = noteStack[note].shift();
-              const duration = Math.max(currentTime - startTime, 10);
-              const timeInSeconds = (startTime / divisionsPerQuarter) * (tempo / 1000000);
-              const durationInSeconds = (duration / divisionsPerQuarter) * (tempo / 1000000);
-              allNotes.push({
-                midi: note,
-                time: Math.max(timeInSeconds, 0),
-                duration: Math.max(durationInSeconds, 0.05),
-              });
-              trackNotesAdded++;
-              noteOffCount++;
+              if (typeof startTime === 'number') {
+                const duration = Math.max(currentTime - startTime, 10);
+                const timeInSeconds = (startTime / divisionsPerQuarter) * (tempo / 1000000);
+                const durationInSeconds = (duration / divisionsPerQuarter) * (tempo / 1000000);
+                allNotes.push({
+                  midi: note,
+                  time: Math.max(timeInSeconds, 0),
+                  duration: Math.max(durationInSeconds, 0.05),
+                });
+                trackNotesAdded++;
+                noteOffCount++;
+              }
             }
           } else if ((eventByte & 0xf0) === 0xc0) {
             // Program change - 1 byte
@@ -220,7 +222,7 @@ export function useAudioManager() {
   useEffect(() => {
     const initTone = async () => {
       try {
-        if (Tone.Destination.state === 'suspended') {
+if (Tone.context.state === 'suspended') {
           await Tone.start();
         }
 
@@ -288,7 +290,7 @@ export function useAudioManager() {
     }
 
     // Clear any existing notes
-    synthRef.current.triggerRelease();
+    synthRef.current.triggerRelease([]);
 
     // Schedule all notes with Tone.js
     const now = Tone.now();
@@ -365,7 +367,7 @@ export function useAudioManager() {
 
     // Immediately release all notes
     if (synthRef.current) {
-      synthRef.current.triggerRelease();
+      synthRef.current.triggerRelease([]);
       // Dispose and recreate synth to fully clear state
       synthRef.current.dispose();
     }
@@ -425,9 +427,6 @@ export function useAudioManager() {
           schedulePlayback(track.path);
         }
       }, 100);
-    }
-  };
-      }, 50);
     }
   };
 

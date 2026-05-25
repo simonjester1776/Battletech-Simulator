@@ -43,9 +43,9 @@ export function MultiplayerLobby({ onStartGame, onBack }: MultiplayerLobbyProps)
     setGeneratedRoomCode(code);
   };
   
-  const handleJoinRoom = () => {
+  const handleJoinRoom = async () => {
     const manager = new NetworkManager();
-    manager.joinRoom(roomCode);
+    await manager.joinRoom(roomCode);
     onStartGame('network', {
       isHost: false,
       roomCode,
@@ -54,7 +54,7 @@ export function MultiplayerLobby({ onStartGame, onBack }: MultiplayerLobbyProps)
   };
   
   const handleStartHotSeat = () => {
-    const hotSeatManager = new HotSeatManager(player1Name, player2Name);
+    const hotSeatManager = new HotSeatManager([player1Name, player2Name]);
     onStartGame('hotseat', {
       hotSeatManager,
       player1Name,

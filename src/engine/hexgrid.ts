@@ -268,15 +268,13 @@ export function getValidMovementHexes(
   const startHex = getHex(grid, unit.position);
   if (!startHex) return [];
   
-  // Determine max MP based on movement mode
-  let maxMP = unit.walkingMP;
-  if (unit.movementMode === MovementMode.RUNNING) {
-    maxMP = unit.runningMP;
-  } else if (unit.movementMode === MovementMode.JUMPING) {
-    maxMP = unit.jumpingMP;
-  }
+  // Don't allow movement if the unit is standing, prone, immobile, or shutdown
+  if (unit.movementMode === MovementMode.STANDING || unit.prone || unit.shutdown) return [];
+
+  // Remaining MP is based on current MP after any movement has already been used
+  let maxMP = unit.currentMP;
   
-  // Apply heat effects
+  // Apply heat effects to remaining MP
   const heatEffect = getHeatEffectForMovement(unit.heat);
   maxMP = Math.max(0, maxMP + heatEffect.mpMod);
   
@@ -369,8 +367,20 @@ export function moveUnit(
     ? hexDistance(unit.position, toCoord)
     : getMovementCost(unit, toHex, fromHex);
   
+  if (movementMode === MovementMode.STANDING) {
+    return { success: false, mpUsed: 0, message: 'Standing units cannot move' };
+  }
+
+  if (unit.shutdown || unit.prone || !unit.alive) {
+    return { success: false, mpUsed: 0, message: 'Unit cannot move' };
+  }
+
   if (mpCost >= 99) {
     return { success: false, mpUsed: 0, message: 'Cannot enter that terrain' };
+  }
+
+  if (mpCost > unit.currentMP) {
+    return { success: false, mpUsed: 0, message: `Not enough movement points (${unit.currentMP} MP remaining)` };
   }
   
   // Update unit position and movement mode

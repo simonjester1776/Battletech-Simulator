@@ -189,16 +189,33 @@ export class MissionObjectiveManager {
           }
           break;
 
-        case ObjectiveType.DEFEND_STRUCTURE:
-          // Check if structure is still standing (simplified - would need structure health)
-          if (objective.turnLimit && turn >= objective.turnLimit) {
-            objective.status = ObjectiveStatus.COMPLETED;
-            objective.progress = 100;
-            completed.push(objective.id);
-          } else if (objective.turnLimit) {
-            objective.progress = Math.floor((turn / objective.turnLimit) * 100);
-            objective.status = ObjectiveStatus.IN_PROGRESS;
+        case ObjectiveType.DESTROY_TARGET:
+          if (objective.targetUnitId) {
+            const target = enemyUnits.find((u) => u.id === objective.targetUnitId);
+            if (!target || !target.alive) {
+              objective.status = ObjectiveStatus.COMPLETED;
+              objective.progress = 100;
+              completed.push(objective.id);
+            } else {
+              objective.status = ObjectiveStatus.IN_PROGRESS;
+            }
           }
+          break;
+
+        case ObjectiveType.DEFEND_STRUCTURE:
+          if (objective.turnLimit && objective.turnsRemaining !== undefined) {
+            objective.turnsRemaining = objective.turnLimit - turn;
+            if (objective.turnsRemaining <= 0) {
+              objective.status = ObjectiveStatus.COMPLETED;
+              objective.progress = 100;
+              completed.push(objective.id);
+              break;
+            }
+          }
+          objective.status = ObjectiveStatus.IN_PROGRESS;
+          objective.progress = objective.turnLimit
+            ? Math.min(100, Math.floor((turn / objective.turnLimit) * 100))
+            : objective.progress;
           break;
       }
     });
@@ -276,6 +293,25 @@ export function generateAssassinationMission(targetName: string, targetId: strin
       cbills: 200000,
       salvage: 5,
       reputation: 15,
+    },
+  };
+}
+
+export function generateDestroyTargetMission(targetName: string, targetId: string): MissionObjective {
+  return {
+    id: 'destroy-primary',
+    type: ObjectiveType.DESTROY_TARGET,
+    title: `Destroy ${targetName}`,
+    description: `Destroy the designated target ${targetName} before they can escape or reinforce.`,
+    status: ObjectiveStatus.PENDING,
+    required: true,
+    progress: 0,
+    progressMax: 100,
+    targetUnitId: targetId,
+    reward: {
+      cbills: 220000,
+      salvage: 5,
+      reputation: 16,
     },
   };
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { GameState, Hex } from '@/types/battletech';
 import { MovementMode } from '@/types/battletech';
+import type { Contract } from '@/lib/campaign';
 import { HexGrid } from '@/components/HexGrid';
 import { UnitPanel } from '@/components/UnitPanel';
 import { GameLog } from '@/components/GameLog';
@@ -34,6 +35,7 @@ interface BattleScreenProps {
   onBack: () => void;
   gameOver: { gameOver: boolean; winner: 'player' | 'ai' | 'draw' | null } | null;
   objectives?: MissionObjective[];
+  contract?: Contract | null;
 }
 
 export function BattleScreen({
@@ -54,6 +56,7 @@ export function BattleScreen({
   onBack,
   gameOver,
   objectives,
+  contract,
 }: BattleScreenProps) {
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
@@ -79,7 +82,7 @@ export function BattleScreen({
 
   const handleSaveGame = () => {
     if (!gameState || !saveName.trim()) return;
-    saveGame(gameState, saveName.trim());
+    saveGame(saveName.trim(), gameState);
     setShowSaveDialog(false);
     setSaveName('');
   };
@@ -221,13 +224,30 @@ export function BattleScreen({
               validTargetHexes={gameState.validTargetHexes}
               onHexClick={onHexClick}
             />
-            
+            {contract && (
+              <div className="bg-gray-900 border border-gray-700 rounded-lg p-4">
+                <h2 className="text-sm font-semibold text-blue-300 mb-2">Contract Mission</h2>
+                <p className="text-sm text-gray-200 font-semibold">{contract.name}</p>
+                <p className="text-xs text-gray-400 mb-2">{contract.description}</p>
+                <div className="grid grid-cols-3 gap-2 text-xs text-gray-400">
+                  <div>
+                    <span className="block text-gray-300">Type</span>
+                    <span>{contract.missionType}</span>
+                  </div>
+                  <div>
+                    <span className="block text-gray-300">Reward</span>
+                    <span>{contract.reward.toLocaleString()} cbills</span>
+                  </div>
+                  <div>
+                    <span className="block text-gray-300">Reputation</span>
+                    <span>{contract.reputation}</span>
+                  </div>
+                </div>
+              </div>
+            )}
             {objectives && objectives.length > 0 && (
               <ObjectivesOverlay objectives={objectives} />
             )}
-          </div>
-          
-          <div className="space-y-4">
             {selectedUnit && (
               <UnitPanel
                 unit={selectedUnit}
@@ -249,6 +269,7 @@ export function BattleScreen({
         <div className="grid lg:grid-cols-2 gap-4 mt-4">
           <ControlPanel
             gameState={gameState}
+            gameOver={gameOver}
             onRollInitiative={onRollInitiative}
             onEndMovement={onEndMovement}
             onEndCombat={onEndCombat}

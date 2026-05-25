@@ -92,6 +92,17 @@ export function calculatePhysicalToHit(
 
 // Execute punch attack
 export function executePunch(attacker: Unit, target: Unit): PhysicalAttackResult {
+  if (attacker.shutdown || attacker.heat >= 30 || !attacker.alive) {
+    return {
+      success: false,
+      damage: 0,
+      attackType: 'punch',
+      roll: 0,
+      target: 0,
+      log: `${attacker.name} cannot punch while overheated/shutdown.`
+    };
+  }
+
   const toHit = calculatePhysicalToHit(attacker, target, 'punch', 0);
   const roll = roll2d6();
   const success = roll >= toHit;
@@ -111,6 +122,17 @@ export function executePunch(attacker: Unit, target: Unit): PhysicalAttackResult
 
 // Execute kick attack
 export function executeKick(attacker: Unit, target: Unit): PhysicalAttackResult {
+  if (attacker.shutdown || attacker.heat >= 30 || !attacker.alive) {
+    return {
+      success: false,
+      damage: 0,
+      attackType: 'kick',
+      roll: 0,
+      target: 0,
+      log: `${attacker.name} cannot kick while overheated/shutdown.`
+    };
+  }
+
   const toHit = calculatePhysicalToHit(attacker, target, 'kick', 0);
   const roll = roll2d6();
   const success = roll >= toHit;
@@ -169,6 +191,18 @@ export function executeDFA(
   attacker: Unit,
   target: Unit
 ): PhysicalAttackResult {
+  if (attacker.shutdown || attacker.heat >= 30 || !attacker.alive) {
+    return {
+      success: false,
+      damage: 0,
+      attackerDamage: 0,
+      attackType: 'dfa',
+      roll: 0,
+      target: 0,
+      log: `${attacker.name} cannot perform DFA while overheated/shutdown.`
+    };
+  }
+
   const toHit = calculatePhysicalToHit(attacker, target, 'dfa', 0);
   const roll = roll2d6();
   const success = roll >= toHit;

@@ -18,6 +18,7 @@ import {
 
 interface ControlPanelProps {
   gameState: GameState;
+  gameOver?: { gameOver: boolean; winner: 'player' | 'ai' | 'draw' | null } | null;
   onRollInitiative: () => void;
   onEndMovement: () => void;
   onEndCombat: () => void;
@@ -33,6 +34,7 @@ interface ControlPanelProps {
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({
   gameState,
+  gameOver,
   onRollInitiative,
   onEndMovement,
   onEndCombat,
@@ -95,12 +97,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   const aiUnits = gameState.units.filter((_, i) => i >= gameState.units.length / 2);
   const aiAliveUnits = aiUnits.filter(u => u.alive);
   
-  const isGameOver = playerAliveUnits.length === 0 || aiAliveUnits.length === 0;
-  const winner = playerAliveUnits.length === 0 
-    ? 'AI Wins!' 
-    : aiAliveUnits.length === 0 
-      ? 'Player Wins!' 
-      : null;
+  const isGameOver = gameOver?.gameOver ?? (playerAliveUnits.length === 0 || aiAliveUnits.length === 0);
+  const winner = gameOver?.winner === 'player' ? 'Player Wins!' :
+    gameOver?.winner === 'ai' ? 'AI Wins!' :
+    gameOver?.winner === 'draw' ? 'Draw!' :
+    playerAliveUnits.length === 0 ? 'AI Wins!' :
+    aiAliveUnits.length === 0 ? 'Player Wins!' :
+    null;
   
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 space-y-4">

@@ -1,12 +1,11 @@
 // Campaign Management UI
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import type { MercenaryCompany, Contract } from '@/lib/campaign';
 import { CampaignManager } from '@/lib/campaign';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { MidiPlayer } from '@/components/MidiPlayer';
-import { useAudioManager } from '@/hooks/useAudioManager';
 import { cn } from '@/lib/utils';
 import { 
   Users, 
@@ -37,7 +36,7 @@ interface CampaignScreenProps {
 
 export function CampaignScreen({ campaignManager, onStartMission, onBack }: CampaignScreenProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'pilots' | 'mechs' | 'contracts'>('overview');
-  const [availableContracts] = useState<Contract[]>(campaignManager.generateContracts(5));
+  const [availableContracts, setAvailableContracts] = useState<Contract[]>(campaignManager.generateContracts(5));
   const [showHirePilot, setShowHirePilot] = useState(false);
   const [company, setCompany] = useState(campaignManager.getCompany());
   
@@ -54,13 +53,18 @@ export function CampaignScreen({ campaignManager, onStartMission, onBack }: Camp
       name: pilot.name,
       gunnery: pilot.gunnery,
       piloting: pilot.piloting,
-      hits: 0,
-      conscious: true,
-      rank: 'Recruit'
-    });
-    campaignManager.addFunds(-50000);
+      rank: 'Recruit',
+      experience: 0
+    }, 50000);
     setCompany(campaignManager.getCompany());
     setShowHirePilot(false);
+  };
+
+  const handleAcceptContract = (contract: Contract) => {
+    campaignManager.addContract(contract);
+    setCompany(campaignManager.getCompany());
+    setAvailableContracts(current => current.filter(c => c.id !== contract.id));
+    onStartMission(contract);
   };
   
   const tabs = [
@@ -165,7 +169,7 @@ export function CampaignScreen({ campaignManager, onStartMission, onBack }: Camp
           {activeTab === 'contracts' && (
             <ContractsTab 
               contracts={availableContracts}
-              onAccept={(contract) => onStartMission(contract)}
+              onAccept={handleAcceptContract}
             />
           )}
         </div>
@@ -214,7 +218,7 @@ function OverviewTab({ company }: { company: MercenaryCompany }) {
           <h3 className="text-lg font-semibold mb-2 text-blue-400">Statistics</h3>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-400">Contracts Available:</span>
+              <span className="text-gray-400">Active Contracts:</span>
               <span className="font-bold">{company.contracts?.length || 0}</span>
             </div>
             <div className="flex justify-between">
@@ -312,11 +316,17 @@ function MechsTab({ company }: { company: MercenaryCompany }) {
               <div className="grid grid-cols-4 gap-4 mt-3 text-sm">
                 <div>
                   <span className="text-gray-400">Armor:</span>
-                  <p className="font-bold">{mech.armor}/{mech.maxArmor}</p>
+                  <p className="font-bold">
+                    {Array.from(mech.locations.values()).reduce((sum, loc) => sum + loc.armor, 0)}/
+                    {Array.from(mech.locations.values()).reduce((sum, loc) => sum + loc.maxArmor, 0)}
+                  </p>
                 </div>
                 <div>
                   <span className="text-gray-400">Internal:</span>
-                  <p className="font-bold">{mech.internals}/{mech.maxInternals}</p>
+                  <p className="font-bold">
+                    {Array.from(mech.locations.values()).reduce((sum, loc) => sum + loc.structure, 0)}/
+                    {Array.from(mech.locations.values()).reduce((sum, loc) => sum + loc.maxStructure, 0)}
+                  </p>
                 </div>
                 <div>
                   <span className="text-gray-400">Heat Sinks:</span>
@@ -373,12 +383,12 @@ function ContractsTab({
                   <p className="font-bold text-green-400">{contract.reward.toLocaleString()} C-Bills</p>
                 </div>
                 <div>
-                  <span className="text-gray-400">Difficulty:</span>
-                  <p className="font-bold">{contract.difficulty}/5</p>
+                  <span className="text-gray-400">Reputation:</span>
+                  <p className="font-bold text-blue-300">{contract.reputation}</p>
                 </div>
                 <div>
-                  <span className="text-gray-400">Faction:</span>
-                  <p className="font-bold">{contract.faction}</p>
+                  <span className="text-gray-400">Difficulty:</span>
+                  <p className="font-bold">{contract.difficulty}/5</p>
                 </div>
                 <div>
                   <span className="text-gray-400">Location:</span>

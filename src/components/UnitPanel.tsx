@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Crosshair, Thermometer, User, Shield, Heart } from 'lucide-react';
-import { getMechIcon, hasMechImages } from '@/lib/mech-images';
+import { getMechIcon } from '@/lib/mech-images';
 
 interface UnitPanelProps {
   unit: Unit | null;

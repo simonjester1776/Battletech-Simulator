@@ -85,6 +85,14 @@ export function calculateToHitModifiers(
 ): { targetNumber: number; modifiers: { [key: string]: number }; canFire: boolean } {
   const modifiers: { [key: string]: number } = {};
   
+  if (!attacker.alive || attacker.shutdown || attacker.prone) {
+    return { targetNumber: 0, modifiers, canFire: false };
+  }
+
+  if (!target.alive) {
+    return { targetNumber: 0, modifiers, canFire: false };
+  }
+
   modifiers['Gunnery'] = attacker.pilot.gunnery;
   
   const rangeMod = getRangeModifier(weapon, distance);
@@ -176,6 +184,20 @@ export function resolveAttack(
   weapon: Weapon,
   distance: number
 ): AttackResult {
+  if (!attacker.alive || attacker.shutdown || attacker.prone || attacker.heat >= 30) {
+    return {
+      hit: false,
+      roll: 0,
+      targetNumber: 0,
+      location: '',
+      damage: 0,
+      criticals: [],
+      ammoExplosion: false,
+      message: `${attacker.name} is overheated/shutdown and cannot fire.`,
+      fired: false
+    };
+  }
+
   if (weapon.shotsRemaining <= 0 && weapon.shotsRemaining !== 999) {
     return {
       hit: false,
@@ -185,14 +207,26 @@ export function resolveAttack(
       damage: 0,
       criticals: [],
       ammoExplosion: false,
-      message: `${weapon.name} - NO AMMO`
+      message: `${weapon.name} - NO AMMO`,
+      fired: false
     };
   }
 
+  const attackerMoved = attacker.currentMP < (attacker.movementMode === 'running'
+    ? attacker.runningMP
+    : attacker.movementMode === 'jumping'
+      ? attacker.jumpingMP
+      : attacker.walkingMP);
+  const targetMoved = target.currentMP < (target.movementMode === 'running'
+    ? target.runningMP
+    : target.movementMode === 'jumping'
+      ? target.jumpingMP
+      : target.walkingMP);
+
   const { targetNumber, canFire } = calculateToHitModifiers(
     attacker, target, weapon, distance, 
-    attacker.movementMode !== 'standing',
-    target.movementMode !== 'standing'
+    attackerMoved,
+    targetMoved
   );
   
   if (!canFire) {
@@ -204,7 +238,8 @@ export function resolveAttack(
       damage: 0,
       criticals: [],
       ammoExplosion: false,
-      message: `${weapon.name} - OUT OF RANGE`
+      message: `${weapon.name} - OUT OF RANGE`,
+      fired: false
     };
   }
   
@@ -224,7 +259,8 @@ export function resolveAttack(
       damage: 0,
       criticals: [],
       ammoExplosion: false,
-      message: `${weapon.name} MISS (rolled ${roll}, needed ${targetNumber})`
+      message: `${weapon.name} MISS (rolled ${roll}, needed ${targetNumber})`,
+      fired: true
     };
   }
   
@@ -253,7 +289,8 @@ export function resolveAttack(
     damage: damageDealt,
     criticals,
     ammoExplosion,
-    message: `${weapon.name} HIT ${location} for ${damageDealt} damage (rolled ${roll} vs ${targetNumber})${isTAC ? ' - THROUGH ARMOR CRITICAL!' : ''}${destroyed ? ' - UNIT DESTROYED!' : ''}`
+    message: `${weapon.name} HIT ${location} for ${damageDealt} damage (rolled ${roll} vs ${targetNumber})${isTAC ? ' - THROUGH ARMOR CRITICAL!' : ''}${destroyed ? ' - UNIT DESTROYED!' : ''}`,
+    fired: true
   };
 }
 

@@ -64,11 +64,11 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
       name: weaponName,
       damage: weaponData.damage,
       heat: weaponData.heat,
-      minRange: weaponData.minRange || 0,
-      shortRange: weaponData.shortRange,
-      mediumRange: weaponData.mediumRange,
-      longRange: weaponData.longRange,
-      type: weaponData.type,
+      minRange: weaponData.range.minimum,
+      shortRange: weaponData.range.short,
+      mediumRange: weaponData.range.medium,
+      longRange: weaponData.range.long,
+      type: weaponData.type as any,
       shotsRemaining: Infinity,
       location: 'CT',
       criticalSlots: weaponData.criticalSlots || 1,
@@ -233,7 +233,7 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
                   />
                 )}
                 <h3 className="text-xl font-bold mt-4 text-blue-400">{config.name}</h3>
-                <p className="text-sm text-gray-400">{currentUnit?.tonnage}t {currentUnit?.class || 'Unit'}</p>
+                <p className="text-sm text-gray-400">{currentUnit?.tonnage}t {currentUnit?.config || 'Unit'}</p>
               </div>
             </Card>
 

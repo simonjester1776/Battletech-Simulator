@@ -76,11 +76,11 @@ export function NetworkMultiplayerLobby({ onStartGame, onBack }: NetworkMultipla
     multiplayerClient.on('error', handleError);
 
     return () => {
-      multiplayerClient.off('player_joined', handlePlayerJoined);
-      multiplayerClient.off('player_left', handlePlayerLeft);
-      multiplayerClient.off('game_started', handleGameStarted);
-      multiplayerClient.off('chat', handleChat);
-      multiplayerClient.off('error', handleError);
+      multiplayerClient.off('player_joined');
+      multiplayerClient.off('player_left');
+      multiplayerClient.off('game_started');
+      multiplayerClient.off('chat');
+      multiplayerClient.off('error');
     };
   }, [mode, currentRoom, playerId, isHost, onStartGame]);
 

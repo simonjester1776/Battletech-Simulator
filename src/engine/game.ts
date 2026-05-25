@@ -1,15 +1,16 @@
 // BattleTech Game Engine - Main Game State Manager
 
-import type { GameState, Unit, HexCoord, LogEntry } from '@/types/battletech';
+import type { GameState, Unit, HexCoord, Hex, LogEntry } from '@/types/battletech';
 import { GamePhase, MovementMode } from '@/types/battletech';
-import { createHexGrid, getHex, setHex, getValidMovementHexes, moveUnit } from './hexgrid';
-import { resolveAttack, resolveHeatPhase, hexDistance } from './combat';
+import { createHexGrid, getHex, setHex, getValidMovementHexes, moveUnit, TERRAIN_TYPES } from './hexgrid';
+import { getValidTargetHexes, resolveAttack, resolveHeatPhase, hexDistance, getRangeModifier } from './combat';
 import { executePunch, executeKick, executeDFA } from './advanced-combat';
 import { roll2d6 } from './dice';
 import { cloneUnit } from './units';
+import { ObjectiveType, ObjectiveStatus, type MissionObjective } from '@/lib/mission-objectives';
 
 // Initialize a new game
-export function initializeGame(playerUnits: Unit[], aiUnits: Unit[]): GameState {
+export function initializeGame(playerUnits: Unit[], aiUnits: Unit[], objectives: MissionObjective[] = []): GameState {
   const grid = createHexGrid(10);
   
   // Clone units once and position them
@@ -42,6 +43,19 @@ export function initializeGame(playerUnits: Unit[], aiUnits: Unit[]): GameState 
   
   const allUnits = [...clonedPlayerUnits, ...clonedAiUnits];
   
+  const initializedObjectives = objectives.map((objective) => {
+    const clonedObjective = { ...objective };
+    if (clonedObjective.type === ObjectiveType.ELIMINATE_ALL) {
+      clonedObjective.progressMax = clonedObjective.progressMax > 0 ? clonedObjective.progressMax : clonedAiUnits.length;
+    }
+    if (clonedObjective.type === ObjectiveType.SURVIVE || clonedObjective.type === ObjectiveType.DEFEND_STRUCTURE) {
+      if (clonedObjective.turnLimit !== undefined && clonedObjective.turnsRemaining === undefined) {
+        clonedObjective.turnsRemaining = clonedObjective.turnLimit;
+      }
+    }
+    return clonedObjective;
+  });
+  
   return {
     turn: 1,
     phase: GamePhase.INITIATIVE,
@@ -51,6 +65,7 @@ export function initializeGame(playerUnits: Unit[], aiUnits: Unit[]): GameState 
     targetUnit: null,
     validMoveHexes: [],
     validTargetHexes: [],
+    objectives: initializedObjectives,
     gameLog: [{
       turn: 1,
       phase: GamePhase.INITIATIVE,
@@ -90,8 +105,13 @@ export function selectUnit(state: GameState, unit: Unit | null): GameState {
   } else {
     newState.validMoveHexes = [];
   }
-  
-  newState.validTargetHexes = [];
+
+  if (unit && state.phase === GamePhase.COMBAT && unit.alive && !unit.shutdown) {
+    newState.validTargetHexes = getValidTargetHexes(unit, state.hexGrid, state.units);
+  } else {
+    newState.validTargetHexes = [];
+  }
+
   newState.targetUnit = null;
   
   return newState;
@@ -103,22 +123,22 @@ export function moveSelectedUnit(
   toCoord: HexCoord, 
   movementMode: MovementMode
 ): GameState {
+  if (state.phase !== GamePhase.MOVEMENT) return state;
   if (!state.selectedUnit || !state.selectedUnit.position) return state;
   
   const newState = { ...state };
   const unit = newState.units.find(u => u.id === state.selectedUnit!.id);
   if (!unit) return state;
   
-  // Remove unit from old hex
   const oldHex = getHex(newState.hexGrid, unit.position!);
-  if (oldHex) {
-    oldHex.unit = null;
-    setHex(newState.hexGrid, oldHex);
-  }
-  
   const result = moveUnit(unit, toCoord, newState.hexGrid, movementMode);
   
   if (result.success) {
+    if (oldHex) {
+      oldHex.unit = null;
+      setHex(newState.hexGrid, oldHex);
+    }
+    
     const newHex = getHex(newState.hexGrid, toCoord);
     if (newHex) {
       newHex.unit = unit;
@@ -128,6 +148,12 @@ export function moveSelectedUnit(
     addLogEntry(newState, `${unit.name} ${result.message}`, 'movement');
     
     newState.validMoveHexes = getValidMovementHexes(unit, newState.hexGrid, newState.units);
+  } else {
+    if (oldHex) {
+      oldHex.unit = unit;
+      setHex(newState.hexGrid, oldHex);
+    }
+    addLogEntry(newState, `${unit.name} failed to move: ${result.message}`, 'info');
   }
   
   return newState;
@@ -145,6 +171,7 @@ export function fireWeapon(
   state: GameState,
   weaponId: string
 ): GameState {
+  if (state.phase !== GamePhase.COMBAT) return state;
   if (!state.selectedUnit || !state.targetUnit) return state;
   
   const newState = { ...state };
@@ -153,13 +180,24 @@ export function fireWeapon(
   
   if (!attacker || !target || !attacker.position || !target.position) return state;
   
+  if (attacker.shutdown || attacker.heat >= 30) {
+    addLogEntry(newState, `${attacker.name} is overheated/shutdown and cannot fire.`, 'info');
+    return newState;
+  }
+
   const weapon = attacker.weapons.find(w => w.id === weaponId);
   if (!weapon) return state;
   
   const distance = hexDistance(attacker.position, target.position);
   const result = resolveAttack(attacker, target, weapon, distance);
   
-  attacker.heat += weapon.heat;
+  if (result.fired !== false) {
+    attacker.heat += weapon.heat;
+    if (attacker.heat >= 30) {
+      attacker.shutdown = true;
+      addLogEntry(newState, `${attacker.name} overheats to ${attacker.heat} heat and shuts down!`, 'heat');
+    }
+  }
   
   addLogEntry(newState, result.message, result.hit ? 'combat' : 'info');
   
@@ -191,16 +229,39 @@ export function fireWeapon(
 
 // Fire all weapons at target
 export function fireAllWeapons(state: GameState): GameState {
+  if (state.phase !== GamePhase.COMBAT) return state;
   if (!state.selectedUnit || !state.targetUnit) return state;
   
   const attacker = state.units.find(u => u.id === state.selectedUnit!.id);
-  if (!attacker) return state;
+  const target = state.units.find(u => u.id === state.targetUnit!.id);
+  if (!attacker || !target) return state;
   
   let newState = { ...state };
+
+  if (attacker.shutdown || attacker.heat >= 30) {
+    addLogEntry(newState, `${attacker.name} cannot fire while shutdown or overheated.`, 'info');
+    return newState;
+  }
   
-  for (const weapon of attacker.weapons) {
-    if (weapon.damage > 0) {
-      newState = fireWeapon(newState, weapon.id);
+  const rangeFilteredWeapons = attacker.weapons
+    .filter(weapon => weapon.damage > 0 && (weapon.shotsRemaining > 0 || weapon.shotsRemaining === 999))
+    .filter(weapon => getRangeModifier(weapon, hexDistance(attacker.position!, target.position!)) !== -1);
+  
+  for (const weapon of rangeFilteredWeapons) {
+    const updatedAttacker = newState.units.find(u => u.id === attacker.id);
+    const updatedTarget = newState.units.find(u => u.id === target.id);
+    if (!updatedAttacker || !updatedTarget || !updatedAttacker.alive || !updatedTarget.alive) break;
+
+    const beforeHeat = updatedAttacker.heat;
+    newState = fireWeapon(newState, weapon.id);
+
+    const refAttacker = newState.units.find(u => u.id === attacker.id);
+    const refTarget = newState.units.find(u => u.id === target.id);
+    if (!refAttacker || !refAttacker.alive) break;
+    if (!refTarget || !refTarget.alive) break;
+    if (refAttacker.shutdown || refAttacker.heat >= 30) break;
+    if (refAttacker.heat === beforeHeat) {
+      continue;
     }
   }
   
@@ -209,6 +270,7 @@ export function fireAllWeapons(state: GameState): GameState {
 
 // Execute punch attack
 export function executePunchAttack(state: GameState): GameState {
+  if (state.phase !== GamePhase.COMBAT) return state;
   if (!state.selectedUnit || !state.targetUnit) return state;
   
   const newState = { ...state };
@@ -245,6 +307,7 @@ export function executePunchAttack(state: GameState): GameState {
 
 // Execute kick attack
 export function executeKickAttack(state: GameState): GameState {
+  if (state.phase !== GamePhase.COMBAT) return state;
   if (!state.selectedUnit || !state.targetUnit) return state;
   
   const newState = { ...state };
@@ -281,6 +344,7 @@ export function executeKickAttack(state: GameState): GameState {
 
 // Execute DFA attack
 export function executeDFAAttack(state: GameState): GameState {
+  if (state.phase !== GamePhase.COMBAT) return state;
   if (!state.selectedUnit || !state.targetUnit) return state;
   
   const newState = { ...state };
@@ -380,15 +444,169 @@ export function resolveHeatPhaseForAll(state: GameState): GameState {
       if (!unit.pilot.conscious) {
         addLogEntry(newState, `${unit.name}: Pilot unconscious!`, 'critical');
       }
+
+      if (unit.shutdown && unit.alive && unit.heat < 15) {
+        unit.shutdown = false;
+        addLogEntry(newState, `${unit.name} cools down and recovers from shutdown.`, 'system');
+      }
     }
   });
   
   return newState;
 }
 
+function evaluateMissionObjective(
+  state: GameState,
+  mutateState: boolean = true
+): { gameOver: boolean; winner: 'player' | 'ai' | 'draw' | null } {
+  if (!state.objectives || state.objectives.length === 0) {
+    return { gameOver: false, winner: null };
+  }
+
+  const objectives = mutateState
+    ? state.objectives
+    : state.objectives.map((objective) => ({ ...objective }));
+
+  const playerUnits = state.units.filter((_, i) => i < state.units.length / 2);
+  const enemyUnits = state.units.filter((_, i) => i >= state.units.length / 2);
+  let allRequiredComplete = true;
+  let anyRequiredFailed = false;
+
+  objectives.forEach((objective) => {
+    if (objective.status === ObjectiveStatus.FAILED && objective.required) {
+      anyRequiredFailed = true;
+    }
+    if (objective.status !== ObjectiveStatus.COMPLETED && objective.required) {
+      allRequiredComplete = false;
+    }
+
+    if (objective.status === ObjectiveStatus.PENDING || objective.status === ObjectiveStatus.IN_PROGRESS) {
+      switch (objective.type) {
+        case ObjectiveType.ELIMINATE_ALL: {
+          const totalEnemies =
+            objective.progressMax > 0 && objective.progressMax <= enemyUnits.length
+              ? objective.progressMax
+              : enemyUnits.length;
+
+          if (enemyUnits.filter((u) => u.alive).length === 0) {
+            objective.status = ObjectiveStatus.COMPLETED;
+            objective.progress = 100;
+          } else {
+            objective.status = ObjectiveStatus.IN_PROGRESS;
+            objective.progress = totalEnemies > 0
+              ? Math.floor(((totalEnemies - enemyUnits.filter((u) => u.alive).length) / totalEnemies) * 100)
+              : 0;
+          }
+          break;
+        }
+
+        case ObjectiveType.ASSASSINATION:
+        case ObjectiveType.DESTROY_TARGET: {
+          if (objective.targetUnitId) {
+            const target = enemyUnits.find((u) => u.id === objective.targetUnitId);
+            if (!target || !target.alive) {
+              objective.status = ObjectiveStatus.COMPLETED;
+              objective.progress = 100;
+            } else {
+              objective.status = ObjectiveStatus.IN_PROGRESS;
+            }
+          }
+          break;
+        }
+
+        case ObjectiveType.SURVIVE: {
+          if (playerUnits.filter((u) => u.alive).length === 0) {
+            objective.status = ObjectiveStatus.FAILED;
+            objective.progress = 0;
+          } else if (objective.turnLimit !== undefined && state.turn >= objective.turnLimit) {
+            objective.status = ObjectiveStatus.COMPLETED;
+            objective.progress = 100;
+          } else if (objective.turnLimit !== undefined) {
+            objective.status = ObjectiveStatus.IN_PROGRESS;
+            objective.progress = Math.min(100, Math.floor((state.turn / objective.turnLimit) * 100));
+          }
+          break;
+        }
+
+        case ObjectiveType.CAPTURE_ZONE: {
+          const targetZone = objective.targetZone;
+          const zoneRadius = objective.zoneRadius;
+          if (targetZone && zoneRadius !== undefined) {
+            const unitsInZone = playerUnits.filter((unit) => {
+              if (!unit.position) return false;
+              const pathCost = Math.max(
+                Math.abs(unit.position.q - targetZone.q),
+                Math.abs(unit.position.r - targetZone.r),
+                Math.abs(unit.position.s - targetZone.s)
+              );
+              return pathCost <= zoneRadius;
+            });
+            if (unitsInZone.length > 0) {
+              objective.status = ObjectiveStatus.COMPLETED;
+              objective.progress = 100;
+            } else {
+              objective.status = ObjectiveStatus.IN_PROGRESS;
+            }
+          }
+          break;
+        }
+
+        case ObjectiveType.ESCORT_UNIT: {
+          if (objective.escortUnitId && objective.extractionPoint) {
+            const escortUnit = playerUnits.find((u) => u.id === objective.escortUnitId);
+            if (!escortUnit || !escortUnit.alive) {
+              objective.status = ObjectiveStatus.FAILED;
+              objective.progress = 0;
+            } else if (escortUnit.position) {
+              const distance = Math.max(
+                Math.abs(escortUnit.position.q - objective.extractionPoint.q),
+                Math.abs(escortUnit.position.r - objective.extractionPoint.r),
+                Math.abs(escortUnit.position.s - objective.extractionPoint.s)
+              );
+              if (distance === 0) {
+                objective.status = ObjectiveStatus.COMPLETED;
+                objective.progress = 100;
+              } else {
+                objective.status = ObjectiveStatus.IN_PROGRESS;
+              }
+            }
+          }
+          break;
+        }
+
+        case ObjectiveType.DEFEND_STRUCTURE: {
+          if (objective.turnLimit && objective.turnsRemaining !== undefined) {
+            objective.turnsRemaining = objective.turnLimit - state.turn;
+            if (objective.turnsRemaining <= 0) {
+              objective.status = ObjectiveStatus.COMPLETED;
+              objective.progress = 100;
+              break;
+            }
+          }
+          objective.status = ObjectiveStatus.IN_PROGRESS;
+          objective.progress = objective.turnLimit
+            ? Math.min(100, Math.floor((state.turn / objective.turnLimit) * 100))
+            : objective.progress;
+          break;
+        }
+      }
+    }
+  });
+
+  if (anyRequiredFailed) {
+    return { gameOver: true, winner: 'ai' };
+  }
+
+  if (allRequiredComplete) {
+    return { gameOver: true, winner: 'player' };
+  }
+
+  return { gameOver: false, winner: null };
+}
+
 // End heat phase and start new turn
 export function endHeatPhase(state: GameState): GameState {
-  const newState = resolveHeatPhaseForAll(state);
+  let newState = resolveHeatPhaseForAll(state);
   newState.turn++;
   newState.phase = GamePhase.INITIATIVE;
   
@@ -398,8 +616,13 @@ export function endHeatPhase(state: GameState): GameState {
       unit.currentMP = unit.walkingMP;
     }
   });
-  
+
   addLogEntry(newState, `Turn ${newState.turn} begins.`, 'system');
+  
+  const objectiveResult = evaluateMissionObjective(newState);
+  if (objectiveResult.gameOver) {
+    addLogEntry(newState, objectiveResult.winner === 'player' ? 'Mission objectives complete!' : 'A required mission objective failed.', objectiveResult.winner === 'player' ? 'system' : 'critical');
+ }
   
   return newState;
 }
@@ -417,6 +640,11 @@ function addLogEntry(state: GameState, message: string, type: LogEntry['type']):
 
 // Check if game is over
 export function checkGameOver(state: GameState): { gameOver: boolean; winner: 'player' | 'ai' | 'draw' | null } {
+  const objectiveResult = evaluateMissionObjective(state, false);
+  if (objectiveResult.gameOver) {
+    return objectiveResult;
+  }
+
   const playerUnits = state.units.filter((_, i) => i < state.units.length / 2);
   const aiUnits = state.units.filter((_, i) => i >= state.units.length / 2);
   
@@ -438,55 +666,165 @@ export function checkGameOver(state: GameState): { gameOver: boolean; winner: 'p
   return { gameOver: false, winner: null };
 }
 
-// AI Turn - Simple AI
+// AI Turn - Movement and combat AI
+function getBestAIWeaponTarget(aiUnit: Unit, enemies: Unit[]): Unit | null {
+  if (!aiUnit.position) return null;
+
+  let bestTarget: Unit | null = null;
+  let bestScore = -Infinity;
+
+  for (const enemy of enemies) {
+    if (!enemy.position) continue;
+
+    const distance = hexDistance(aiUnit.position, enemy.position);
+    const weaponsInRange = aiUnit.weapons.filter(
+      weapon => getRangeModifier(weapon, distance) !== -1 && (weapon.shotsRemaining > 0 || weapon.shotsRemaining === 999)
+    );
+
+    if (weaponsInRange.length === 0) continue;
+
+    const totalArmor = Array.from(enemy.locations.values()).reduce((sum, loc) => sum + loc.armor, 0);
+    const totalStructure = Array.from(enemy.locations.values()).reduce((sum, loc) => sum + loc.structure, 0);
+    const totalHealth = totalArmor + totalStructure;
+    const potentialDamage = weaponsInRange.reduce((sum, weapon) => sum + weapon.damage, 0);
+    const pilotPenalty = enemy.pilot.hits * 7;
+    const distancePenalty = Math.abs(distance - 3) * 8;
+    const overheatBonus = enemy.heat >= 18 ? 12 : 0;
+    const valueBonus = enemy.bv2 * 0.035;
+
+    const score =
+      potentialDamage * 0.9 +
+      valueBonus -
+      totalHealth * 0.3 -
+      pilotPenalty -
+      distancePenalty +
+      overheatBonus;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestTarget = enemy;
+    }
+  }
+
+  return bestTarget;
+}
+
+function getBestMovementHex(aiUnit: Unit, enemy: Unit, validHexes: HexCoord[], grid: Map<string, Hex>): HexCoord | null {
+  let bestHex: HexCoord | null = null;
+  let bestScore = -Infinity;
+  const preferredRange = 3;
+
+  for (const hex of validHexes) {
+    const dist = hexDistance(hex, enemy.position!);
+    const canShootFromHex = aiUnit.weapons.some(weapon => getRangeModifier(weapon, dist) !== -1);
+    const terrainHex = getHex(grid, hex);
+    const coverBonus = terrainHex && TERRAIN_TYPES[terrainHex.terrain].coverProvided ? 18 : 0;
+    const rangeScore = canShootFromHex ? 60 - Math.abs(dist - preferredRange) * 12 : -dist * 8;
+    const approachBonus = canShootFromHex ? 0 : Math.max(0, 16 - dist * 2);
+    const heatPenalty = aiUnit.heat > 12 ? -(aiUnit.heat - 12) * 4 : 0;
+    const score = coverBonus + rangeScore + approachBonus + heatPenalty;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestHex = hex;
+    }
+  }
+
+  return bestHex;
+}
+
+function chooseAIMovementMode(unit: Unit, targetDistance: number): MovementMode {
+  if (unit.heat >= 18) return MovementMode.WALKING;
+  if (unit.heat >= 12) return MovementMode.WALKING;
+  if (unit.jumpingMP > 0 && targetDistance >= 5) return MovementMode.JUMPING;
+  if (unit.runningMP > unit.walkingMP && unit.currentMP > 2) return MovementMode.RUNNING;
+  return MovementMode.WALKING;
+}
+
+function fireBestAIWeapons(state: GameState, attacker: Unit, target: Unit): GameState {
+  if (!attacker.position || !target.position) return state;
+
+  let newState = state;
+  const distance = hexDistance(attacker.position, target.position);
+  const weapons = attacker.weapons
+    .filter(weapon => weapon.damage > 0 && (weapon.shotsRemaining > 0 || weapon.shotsRemaining === 999) && getRangeModifier(weapon, distance) !== -1)
+    .sort((a, b) => {
+      const aValue = a.damage / Math.max(1, a.heat) + (a.heat <= 3 ? 2 : 0);
+      const bValue = b.damage / Math.max(1, b.heat) + (b.heat <= 3 ? 2 : 0);
+      return bValue - aValue || b.damage - a.damage;
+    });
+
+  for (const weapon of weapons) {
+    const currentAttacker = newState.units.find(u => u.id === attacker.id);
+    if (!currentAttacker || currentAttacker.shutdown || currentAttacker.heat >= 30) break;
+    if (currentAttacker.heat + weapon.heat >= 30) continue;
+
+    newState = fireWeapon(newState, weapon.id);
+
+    const refAttacker = newState.units.find(u => u.id === attacker.id);
+    const refTarget = newState.units.find(u => u.id === target.id);
+    if (!refAttacker || !refAttacker.alive) break;
+    if (!refTarget || !refTarget.alive) break;
+    if (refAttacker.shutdown || refAttacker.heat >= 30) break;
+  }
+
+  return newState;
+}
+
 export function executeAITurn(state: GameState): GameState {
   let newState = { ...state };
-  const aiUnits = newState.units.filter((_, i) => i >= newState.units.length / 2 && _.alive);
+  const aiUnits = newState.units.filter((_, i) => i >= newState.units.length / 2 && _.alive && !_.shutdown && !_.immobile);
   const playerUnits = newState.units.filter((_, i) => i < newState.units.length / 2 && _.alive);
-  
+
   if (aiUnits.length === 0 || playerUnits.length === 0) return newState;
-  
-  for (const aiUnit of aiUnits) {
-    let nearestEnemy: Unit | null = null;
-    let nearestDistance = Infinity;
-    
-    for (const playerUnit of playerUnits) {
-      if (playerUnit.position && aiUnit.position) {
-        const dist = hexDistance(aiUnit.position, playerUnit.position);
-        if (dist < nearestDistance) {
-          nearestDistance = dist;
-          nearestEnemy = playerUnit;
+
+  if (newState.phase === GamePhase.MOVEMENT) {
+    for (const aiUnit of aiUnits) {
+      if (!aiUnit.position || aiUnit.currentMP <= 0) continue;
+
+      let nearestEnemy: Unit | null = null;
+      let nearestDistance = Infinity;
+
+      for (const playerUnit of playerUnits) {
+        if (playerUnit.position) {
+          const dist = hexDistance(aiUnit.position, playerUnit.position);
+          if (dist < nearestDistance) {
+            nearestDistance = dist;
+            nearestEnemy = playerUnit;
+          }
         }
       }
-    }
-    
-    if (nearestEnemy && nearestEnemy.position) {
+
+      if (!nearestEnemy || !nearestEnemy.position) continue;
+
       newState = selectUnit(newState, aiUnit);
-      
-      let bestHex: HexCoord | null = null;
-      let bestDistance = nearestDistance;
-      
-      for (const hex of newState.validMoveHexes) {
-        const dist = hexDistance(hex, nearestEnemy.position!);
-        if (dist < bestDistance) {
-          bestDistance = dist;
-          bestHex = hex;
-        }
-      }
-      
+      if (newState.validMoveHexes.length === 0) continue;
+
+      const movementMode = chooseAIMovementMode(aiUnit, nearestDistance);
+      const bestHex = getBestMovementHex(aiUnit, nearestEnemy, newState.validMoveHexes, newState.hexGrid);
+
       if (bestHex) {
-        const mode = aiUnit.runningMP > aiUnit.walkingMP ? MovementMode.RUNNING : MovementMode.WALKING;
-        newState = moveSelectedUnit(newState, bestHex, mode);
-      }
-      
-      const updatedAIUnit = newState.units.find(u => u.id === aiUnit.id);
-      if (updatedAIUnit && nearestEnemy.alive) {
-        newState = selectUnit(newState, updatedAIUnit);
-        newState = selectTarget(newState, nearestEnemy);
-        newState = fireAllWeapons(newState);
+        newState = moveSelectedUnit(newState, bestHex, movementMode);
+        addLogEntry(newState, `${aiUnit.name} advances toward ${nearestEnemy.name}`, 'system');
       }
     }
   }
-  
+
+  if (newState.phase === GamePhase.MOVEMENT || newState.phase === GamePhase.COMBAT) {
+    newState.phase = GamePhase.COMBAT;
+
+    for (const aiUnit of aiUnits) {
+      if (!aiUnit.position) continue;
+
+      const target = getBestAIWeaponTarget(aiUnit, playerUnits);
+      if (!target) continue;
+
+      newState = selectUnit(newState, aiUnit);
+      newState = selectTarget(newState, target);
+      newState = fireBestAIWeapons(newState, aiUnit, target);
+      addLogEntry(newState, `${aiUnit.name} engages ${target.name}`, 'system');
+    }
+  }
+
   return newState;
 }
