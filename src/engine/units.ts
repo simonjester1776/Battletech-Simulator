@@ -1152,6 +1152,11 @@ export function cloneUnit(unit: Unit): Unit {
     weapons: unit.weapons.map(w => ({ ...w, shotsRemaining: w.shotsRemaining })),
     ammo: unit.ammo.map(a => ({ ...a })),
     pilot: { ...unit.pilot },
-    position: null
+    position: null,
+    torsoFacing: unit.torsoFacing ?? unit.facing,
+    torsoTwistsThisTurn: unit.torsoTwistsThisTurn ?? 0,
+    maxTorsoTwists: unit.maxTorsoTwists ?? 1,
+    amsActive: unit.hasAMS ? (unit.amsActive ?? true) : false,
+    amsHeat: unit.amsHeat ?? 0
   };
 }

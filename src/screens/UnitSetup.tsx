@@ -4,12 +4,14 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Play } from 'lucide-react';
 import type { Unit } from '@/types/battletech';
+import type { Contract } from '@/lib/campaign';
 import { getMechIcon, getMechSmallImage, hasMechImages } from '@/lib/mech-images';
 
 interface UnitSetupProps {
   availableUnits: Unit[];
   playerSelections: string[];
   aiSelections: string[];
+  contract?: Contract | null;
   onPlayerSelectionChange: (selections: string[]) => void;
   onAiSelectionChange: (selections: string[]) => void;
   onStartGame: () => void;
@@ -20,6 +22,7 @@ export function UnitSetup({
   availableUnits,
   playerSelections,
   aiSelections,
+  contract,
   onPlayerSelectionChange,
   onAiSelectionChange,
   onStartGame,
@@ -66,6 +69,21 @@ export function UnitSetup({
             Start Battle
           </Button>
         </div>
+        {contract && (
+          <div className="mb-6 rounded-lg border border-gray-700 bg-gray-900 p-4 text-sm text-gray-300">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="font-semibold text-blue-300">Contract Briefing</h2>
+                <p className="text-xs text-gray-400">{contract.description}</p>
+              </div>
+              <div className="text-right text-xs text-gray-400">
+                <div>Reward: {contract.reward.toLocaleString()} cbills</div>
+                <div>Salvage: {contract.salvage} tons</div>
+                <div>Reputation: {contract.reputation}</div>
+              </div>
+            </div>
+          </div>
+        )}
         
         <div className="grid lg:grid-cols-2 gap-6">
           {/* Player Forces */}

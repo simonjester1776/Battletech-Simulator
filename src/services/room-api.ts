@@ -6,7 +6,7 @@ export interface Room {
   id: string;
   host: string | null;
   players: string[];
-  game_state: any;
+  game_state: unknown;
   created_at: string;
   status: 'waiting' | 'in_progress' | 'completed';
 }

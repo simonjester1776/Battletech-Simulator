@@ -15,6 +15,24 @@ interface NetworkMultiplayerLobbyProps {
   onBack: () => void;
 }
 
+interface PlayerCountMessage {
+  total_players: number;
+}
+
+interface ChatMessage {
+  player_id: string;
+  message: string;
+}
+
+interface ErrorMessage {
+  message: string;
+}
+
+interface NetworkGameStartPayload {
+  roomId: string;
+  startedAt: number;
+}
+
 export function NetworkMultiplayerLobby({ onStartGame, onBack }: NetworkMultiplayerLobbyProps) {
   const [mode, setMode] = useState<'menu' | 'host' | 'join' | 'lobby'>('menu');
   const [roomCode, setRoomCode] = useState('');
@@ -36,7 +54,7 @@ export function NetworkMultiplayerLobby({ onStartGame, onBack }: NetworkMultipla
   useEffect(() => {
     if (mode !== 'lobby') return;
 
-    const handlePlayerJoined = (message: any) => {
+    const handlePlayerJoined = (message: PlayerCountMessage) => {
       setPlayerCount(message.total_players);
       setChatMessages(prev => [...prev, {
         player: 'System',
@@ -44,7 +62,7 @@ export function NetworkMultiplayerLobby({ onStartGame, onBack }: NetworkMultipla
       }]);
     };
 
-    const handlePlayerLeft = (message: any) => {
+    const handlePlayerLeft = (message: PlayerCountMessage) => {
       setPlayerCount(message.total_players);
       setChatMessages(prev => [...prev, {
         player: 'System',
@@ -52,20 +70,20 @@ export function NetworkMultiplayerLobby({ onStartGame, onBack }: NetworkMultipla
       }]);
     };
 
-    const handleGameStarted = (_message: any) => {
+    const handleGameStarted = () => {
       if (currentRoom && playerId) {
         onStartGame(currentRoom.id, isHost, playerId);
       }
     };
 
-    const handleChat = (message: any) => {
+    const handleChat = (message: ChatMessage) => {
       setChatMessages(prev => [...prev, {
         player: message.player_id,
         message: message.message
       }]);
     };
 
-    const handleError = (message: any) => {
+    const handleError = (message: ErrorMessage) => {
       setError(message.message || 'An error occurred');
     };
 
@@ -145,7 +163,12 @@ export function NetworkMultiplayerLobby({ onStartGame, onBack }: NetworkMultipla
     }
 
     // Send start game signal
-    multiplayerClient.startGame({} as any); // Game state will be initialized on game start
+    const payload: NetworkGameStartPayload = {
+      roomId: currentRoom?.id ?? roomCode,
+      startedAt: Date.now()
+    };
+
+    multiplayerClient.startGame(payload);
   };
 
   const handleCopyRoomCode = () => {

@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { Wifi, Monitor } from 'lucide-react';
 
 interface MultiplayerLobbyProps {
-  onStartGame: (mode: GameMode, config: any) => void;
+  onStartGame: (mode: GameMode, config: unknown) => void;
   onBack: () => void;
 }
 

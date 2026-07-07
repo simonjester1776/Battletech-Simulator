@@ -5,10 +5,13 @@ import { GamePhase, MovementMode } from '@/types/battletech';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { hasLineOfSight } from '@/engine/hexgrid';
+import { hexDistance } from '@/engine/combat';
 import { 
   Play, 
   SkipForward, 
   RotateCcw,
+  RotateCw,
   Target,
   Move,
   Thermometer,
@@ -28,8 +31,10 @@ interface ControlPanelProps {
   onPunchAttack: () => void;
   onKickAttack: () => void;
   onDFAAttack: () => void;
+  onTorsoTwist: (direction: 'left' | 'right') => void;
   onRestart: () => void;
   onAIturn: () => void;
+  onToggleAMS: () => void;
 }
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -44,11 +49,21 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onPunchAttack,
   onKickAttack,
   onDFAAttack,
+  onTorsoTwist,
+  onToggleAMS,
   onRestart,
   onAIturn
 }) => {
   const { phase, turn, initiativeWinner, selectedUnit, targetUnit } = gameState;
   
+  const targetDistance = selectedUnit && targetUnit && selectedUnit.position && targetUnit.position
+    ? hexDistance(selectedUnit.position, targetUnit.position)
+    : null;
+
+  const targetLOS = selectedUnit && targetUnit && selectedUnit.position && targetUnit.position && selectedUnit.position && targetUnit.position
+    ? hasLineOfSight(selectedUnit.position, targetUnit.position, gameState.hexGrid)
+    : false;
+
   const getPhaseInfo = () => {
     switch (phase) {
       case GamePhase.INITIATIVE:
@@ -305,23 +320,55 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             MP: {selectedUnit.currentMP}/{selectedUnit.walkingMP} | 
             Heat: {selectedUnit.heat} | 
             Status: {selectedUnit.shutdown ? 'SHUTDOWN' : selectedUnit.movementMode.toUpperCase()}
+            {selectedUnit.torsoFacing !== undefined && (
+              <> | Torso: {selectedUnit.torsoFacing} (Twists: {selectedUnit.torsoTwistsThisTurn ?? 0}/{selectedUnit.maxTorsoTwists ?? 1})</>
+            )}
+            {selectedUnit.hasAMS && (
+              <> | AMS: {selectedUnit.amsActive ? 'On' : 'Off'}{selectedUnit.amsAmmo !== undefined && selectedUnit.amsAmmo !== Infinity ? ` (${selectedUnit.amsAmmo})` : ''}{selectedUnit.amsRating ? ` R${selectedUnit.amsRating}` : ''}</>
+            )}
           </p>
-        </div>
-      )}
-      
-      {targetUnit && (
-        <div className="bg-gray-800 rounded-lg p-3">
-          <p className="text-sm text-gray-300">
-            Target: <span className="font-bold text-red-400">{targetUnit.name}</span>
-          </p>
-          <p className="text-xs text-gray-400">
-            Distance: {selectedUnit?.position && targetUnit.position 
-              ? Math.max(
-                  Math.abs(selectedUnit.position.q - targetUnit.position.q),
-                  Math.abs(selectedUnit.position.r - targetUnit.position.r),
-                  Math.abs(selectedUnit.position.s - targetUnit.position.s)
-                )
-              : '-'} hexes
+          {targetUnit && targetDistance !== null && (
+            <p className="text-xs text-gray-300 mt-2">
+              Target: {targetUnit.name} | Distance: {targetDistance} | LOS: {targetLOS ? 'Clear' : 'Blocked'}
+            </p>
+          )}
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onTorsoTwist('left')}
+              disabled={selectedUnit.shutdown || !selectedUnit.alive || selectedUnit.currentMP <= 0 || (selectedUnit.torsoTwistsThisTurn ?? 0) >= (selectedUnit.maxTorsoTwists ?? 1)}
+            >
+              <RotateCcw className="w-4 h-4 mr-1" />
+              Twist Left
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onTorsoTwist('right')}
+              disabled={selectedUnit.shutdown || !selectedUnit.alive || selectedUnit.currentMP <= 0 || (selectedUnit.torsoTwistsThisTurn ?? 0) >= (selectedUnit.maxTorsoTwists ?? 1)}
+            >
+              <RotateCw className="w-4 h-4 mr-1" />
+              Twist Right
+            </Button>
+            {selectedUnit.hasAMS && (
+              <Button
+                size="sm"
+                variant={selectedUnit.amsActive ? 'default' : 'outline'}
+                onClick={onToggleAMS}
+                disabled={selectedUnit.shutdown || !selectedUnit.alive}
+              >
+                {selectedUnit.amsActive ? 'AMS On' : 'AMS Off'}
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-gray-400 mt-2">
+            Distance: {selectedUnit.position && targetUnit?.position ?
+              Math.max(
+                Math.abs(selectedUnit.position.q - targetUnit.position.q),
+                Math.abs(selectedUnit.position.r - targetUnit.position.r),
+                Math.abs(selectedUnit.position.s - targetUnit.position.s)
+              ) : '-'} hexes
           </p>
         </div>
       )}

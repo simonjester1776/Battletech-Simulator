@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { GameState, Hex } from '@/types/battletech';
 import { MovementMode } from '@/types/battletech';
 import type { Contract } from '@/lib/campaign';
 import { HexGrid } from '@/components/HexGrid';
 import { UnitPanel } from '@/components/UnitPanel';
-import { GameLog } from '@/components/GameLog';
 import { ControlPanel } from '@/components/ControlPanel';
 import { ObjectivesOverlay } from '@/components/ObjectivesOverlay';
 import { Button } from '@/components/ui/button';
@@ -15,6 +14,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ArrowLeft, Save, FolderOpen, Download, Trash2, AlertTriangle, Settings } from 'lucide-react';
 import { saveGame, loadGame, getSaveList, exportGameAsFile, deleteSave, deleteAllSaves, getSaveStats } from '@/lib/save-system';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { ObjectiveStatus } from '@/lib/mission-objectives';
 import type { MissionObjective } from '@/lib/mission-objectives';
 
 interface BattleScreenProps {
@@ -26,12 +26,15 @@ interface BattleScreenProps {
   onEndCombat: () => void;
   onEndHeat: () => void;
   onMovementModeChange: (mode: MovementMode) => void;
+  onFireWeapon: (weaponId: string) => void;
   onFireAllWeapons: () => void;
   onPunchAttack: () => void;
   onKickAttack: () => void;
   onDFAAttack: () => void;
+  onTorsoTwist: (direction: 'left' | 'right') => void;
   onRestart: () => void;
   onAIturn: () => void;
+  onToggleAMS: () => void;
   onBack: () => void;
   gameOver: { gameOver: boolean; winner: 'player' | 'ai' | 'draw' | null } | null;
   objectives?: MissionObjective[];
@@ -47,10 +50,13 @@ export function BattleScreen({
   onEndCombat,
   onEndHeat,
   onMovementModeChange,
+  onFireWeapon,
   onFireAllWeapons,
   onPunchAttack,
   onKickAttack,
   onDFAAttack,
+  onTorsoTwist,
+  onToggleAMS,
   onRestart,
   onAIturn,
   onBack,
@@ -130,6 +136,12 @@ export function BattleScreen({
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
+  const [showMissionBriefing, setShowMissionBriefing] = useState<boolean>(!!contract && !!objectives && objectives.length > 0);
+
+  useEffect(() => {
+    setShowMissionBriefing(!!contract && !!objectives && objectives.length > 0);
+  }, [contract, objectives]);
+
   const playerUnits = gameState.units.filter((_, i) => i < gameState.units.length / 2);
   const aiUnits = gameState.units.filter((_, i) => i >= gameState.units.length / 2);
 
@@ -140,6 +152,8 @@ export function BattleScreen({
   const targetUnit = gameState.targetUnit
     ? [...playerUnits, ...aiUnits].find(u => u.id === gameState.targetUnit?.id)
     : null;
+
+  const completedObjectives = objectives?.filter(o => o.status === ObjectiveStatus.COMPLETED).length ?? 0;
 
   return (
     <div className="min-h-screen bg-gray-950 text-white hvymtl1">
@@ -243,7 +257,77 @@ export function BattleScreen({
                     <span>{contract.reputation}</span>
                   </div>
                 </div>
+                <div className="grid grid-cols-3 gap-2 text-xs text-gray-400 mt-3">
+                  <div>
+                    <span className="block text-gray-300">Salvage</span>
+                    <span>{contract.salvage.toLocaleString()} tons</span>
+                  </div>
+                  <div>
+                    <span className="block text-gray-300">Difficulty</span>
+                    <span>{contract.difficulty}</span>
+                  </div>
+                  <div>
+                    <span className="block text-gray-300">Objectives</span>
+                    <span>{completedObjectives}/{objectives?.length ?? 0} complete</span>
+                  </div>
+                </div>
               </div>
+            )}
+            {showMissionBriefing && contract && objectives && (
+              <Dialog open={showMissionBriefing} onOpenChange={(open) => setShowMissionBriefing(open)}>
+                <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="text-2xl">Mission Briefing</DialogTitle>
+                    <DialogDescription className="text-gray-400">
+                      {contract.description}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="rounded-lg border border-gray-700 bg-slate-950 p-4">
+                      <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
+                        <span>{contract.missionType.toUpperCase()}</span>
+                        <span>Difficulty: {contract.difficulty}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 text-sm text-gray-300">
+                        <div>
+                          <p className="text-gray-400">Reward</p>
+                          <p>{contract.reward.toLocaleString()} cbills</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400">Reputation</p>
+                          <p>{contract.reputation}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400">Salvage</p>
+                          <p>{contract.salvage} tons</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-gray-700 bg-slate-950 p-4">
+                      <h3 className="text-sm font-semibold text-gray-200 mb-3">Objectives</h3>
+                      <div className="space-y-3">
+                        {objectives.map((objective) => (
+                          <div key={objective.id} className="rounded border border-gray-800 bg-gray-900 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-gray-100">{objective.title}</span>
+                              <span className="text-[11px] text-gray-400">{objective.required ? 'Required' : 'Optional'}</span>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">{objective.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      onClick={() => setShowMissionBriefing(false)}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      Begin Mission
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             )}
             {objectives && objectives.length > 0 && (
               <ObjectivesOverlay objectives={objectives} />
@@ -253,6 +337,9 @@ export function BattleScreen({
                 unit={selectedUnit}
                 isSelected={true}
                 showWeapons={true}
+                onWeaponClick={onFireWeapon}
+                targetUnit={targetUnit}
+                hexGrid={gameState.hexGrid}
               />
             )}
             
@@ -279,16 +366,15 @@ export function BattleScreen({
             onPunchAttack={onPunchAttack}
             onKickAttack={onKickAttack}
             onDFAAttack={onDFAAttack}
+            onTorsoTwist={onTorsoTwist}
+            onToggleAMS={onToggleAMS}
             onRestart={onRestart}
             onAIturn={onAIturn}
           />
-          
-          <GameLog entries={gameState.gameLog} />
         </div>
       </div>
-      
-      {/* Game Over Dialog */}
-      <Dialog open={!!gameOver?.gameOver}>
+
+      <Dialog open={!!gameOver?.gameOver} onOpenChange={() => {}}>
         <DialogContent className="bg-gray-900 border-gray-700 text-white">
           <DialogHeader>
             <DialogTitle className="text-2xl">
@@ -297,8 +383,18 @@ export function BattleScreen({
               {gameOver?.winner === 'draw' && '🤝 Draw!'}
             </DialogTitle>
             <DialogDescription className="text-gray-400">
-              {gameOver?.winner === 'player' && 'You have destroyed all enemy units!'}
-              {gameOver?.winner === 'ai' && 'Your forces have been eliminated!'}
+              {gameOver?.winner === 'player' && objectives?.some(o => o.status === ObjectiveStatus.COMPLETED)
+                ? 'Mission objectives complete!'
+                : gameOver?.winner === 'player'
+                  ? 'You have destroyed all enemy units!'
+                  : null}
+              {contract && gameOver?.winner === 'player' && completedObjectives > 0 && (
+                <span> Contract success: {contract.reward.toLocaleString()} cbills, +{contract.salvage} salvage.</span>
+              )}
+              {contract && gameOver?.winner === 'ai' && (
+                <span> Contract failed: the enemy mission succeeded.</span>
+              )}
+              {gameOver?.winner === 'ai' && !contract && 'Your forces have been eliminated!'}
               {gameOver?.winner === 'draw' && 'All units have been destroyed!'}
             </DialogDescription>
           </DialogHeader>

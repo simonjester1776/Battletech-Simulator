@@ -68,7 +68,7 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
       shortRange: weaponData.range.short,
       mediumRange: weaponData.range.medium,
       longRange: weaponData.range.long,
-      type: weaponData.type as any,
+      type: weaponData.type as Weapon['type'],
       shotsRemaining: Infinity,
       location: 'CT',
       criticalSlots: weaponData.criticalSlots || 1,

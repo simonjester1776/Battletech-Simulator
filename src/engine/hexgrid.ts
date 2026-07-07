@@ -1,7 +1,7 @@
 // Hex Grid Engine for BattleTech
 
 import type { HexCoord, Hex, Unit } from '@/types/battletech';
-import { TerrainType, MovementMode } from '@/types/battletech';
+import { TerrainType, MovementMode, HEAT_SCALE_EFFECTS, UnitType } from '@/types/battletech';
 
 // Terrain definitions
 export const TERRAIN_TYPES = {
@@ -222,29 +222,9 @@ export function getMovementCost(unit: Unit, hex: Hex, fromHex: Hex): number {
 
 // Get heat effect for movement
 function getHeatEffectForMovement(heat: number): { mpMod: number; toHitMod: number; shutdownRoll: number; ammoExplosionRoll: number; description: string } {
-  const HEAT_SCALE_EFFECTS: { [heat: number]: { mpMod: number; toHitMod: number; shutdownRoll: number; ammoExplosionRoll: number; description: string } } = {
-    0: { mpMod: 0, toHitMod: 0, shutdownRoll: 0, ammoExplosionRoll: 0, description: 'Normal' },
-    5: { mpMod: -1, toHitMod: 0, shutdownRoll: 0, ammoExplosionRoll: 0, description: '-1 Walking MP' },
-    8: { mpMod: -1, toHitMod: 1, shutdownRoll: 0, ammoExplosionRoll: 0, description: '+1 To-Hit' },
-    10: { mpMod: -2, toHitMod: 1, shutdownRoll: 0, ammoExplosionRoll: 0, description: '-2 Walking MP' },
-    13: { mpMod: -2, toHitMod: 2, shutdownRoll: 0, ammoExplosionRoll: 0, description: '+2 To-Hit' },
-    14: { mpMod: -2, toHitMod: 2, shutdownRoll: 4, ammoExplosionRoll: 0, description: 'Shutdown on 4+' },
-    15: { mpMod: -3, toHitMod: 2, shutdownRoll: 4, ammoExplosionRoll: 0, description: '-3 Walking MP' },
-    17: { mpMod: -3, toHitMod: 3, shutdownRoll: 6, ammoExplosionRoll: 0, description: '+3 To-Hit' },
-    18: { mpMod: -3, toHitMod: 3, shutdownRoll: 6, ammoExplosionRoll: 0, description: 'Shutdown on 6+' },
-    19: { mpMod: -4, toHitMod: 3, shutdownRoll: 8, ammoExplosionRoll: 4, description: '-4 MP, Ammo Explosion on 4+' },
-    20: { mpMod: -4, toHitMod: 3, shutdownRoll: 8, ammoExplosionRoll: 4, description: 'Shutdown on 8+' },
-    23: { mpMod: -4, toHitMod: 4, shutdownRoll: 10, ammoExplosionRoll: 6, description: '+4 To-Hit' },
-    24: { mpMod: -4, toHitMod: 4, shutdownRoll: 10, ammoExplosionRoll: 6, description: 'Shutdown on 10+' },
-    25: { mpMod: -5, toHitMod: 4, shutdownRoll: 10, ammoExplosionRoll: 6, description: '-5 MP' },
-    26: { mpMod: -5, toHitMod: 4, shutdownRoll: 10, ammoExplosionRoll: 8, description: 'Shutdown on 10+' },
-    28: { mpMod: -5, toHitMod: 5, shutdownRoll: 10, ammoExplosionRoll: 8, description: '+5 To-Hit, Ammo Explosion on 8+' },
-    30: { mpMod: -5, toHitMod: 5, shutdownRoll: 0, ammoExplosionRoll: 0, description: 'AUTO SHUTDOWN' }
-  };
-  
   let effect = HEAT_SCALE_EFFECTS[0];
   let threshold = 0;
-  
+
   for (const [h, e] of Object.entries(HEAT_SCALE_EFFECTS)) {
     const heatVal = parseInt(h);
     if (heat >= heatVal && heatVal >= threshold) {
@@ -252,7 +232,7 @@ function getHeatEffectForMovement(heat: number): { mpMod: number; toHitMod: numb
       effect = e;
     }
   }
-  
+
   return effect;
 }
 
@@ -439,13 +419,60 @@ function hexRound(q: number, r: number): HexCoord {
   return createHex(rq, rr);
 }
 
-// Get line of sight between two hexes (simple version)
+function hexLerp(a: HexCoord, b: HexCoord, t: number): HexCoord {
+  return {
+    q: a.q + (b.q - a.q) * t,
+    r: a.r + (b.r - a.r) * t,
+    s: a.s + (b.s - a.s) * t
+  };
+}
+
+export function getHexLine(from: HexCoord, to: HexCoord, grid: Map<string, Hex>): Hex[] {
+  const line: Hex[] = [];
+  const distance = hexDistance(from, to);
+
+  for (let i = 1; i < distance; i++) {
+    const frac = i / distance;
+    const coord = hexRound(hexLerp(from, to, frac).q, hexLerp(from, to, frac).r);
+    const hex = getHex(grid, coord);
+    if (hex) {
+      line.push(hex);
+    }
+  }
+
+  return line;
+}
+
+// Get line of sight between two hexes
 export function hasLineOfSight(
   from: HexCoord, 
   to: HexCoord, 
   grid: Map<string, Hex>
 ): boolean {
-  return hasHex(grid, from) && hasHex(grid, to);
+  const fromHex = getHex(grid, from);
+  const toHex = getHex(grid, to);
+  if (!fromHex || !toHex) return false;
+  const line = getHexLine(from, to, grid);
+
+  // If any intervening hex contains a building or heavy woods, block LoS
+  if (line.some(hex => hex.terrain === TerrainType.BUILDING || hex.terrain === TerrainType.HEAVY_WOODS)) {
+    return false;
+  }
+
+  // MegaMek treats mechs as looking from one elevation level above their hex.
+  const fromUnit = fromHex.unit as Unit | null;
+  const toUnit = toHex.unit as Unit | null;
+
+  const effectiveFromElevation = fromHex.elevation + (fromUnit && fromUnit.unitType === UnitType.MECH ? 1 : 0);
+  const effectiveToElevation = toHex.elevation + (toUnit && toUnit.unitType === UnitType.MECH ? 1 : 0);
+
+  // If any intermediate hex has elevation strictly higher than both effective endpoints, it blocks LoS
+  for (const hex of line) {
+    if (hex.elevation > Math.max(effectiveFromElevation, effectiveToElevation)) return false;
+  }
+
+  // Otherwise LoS is allowed
+  return true;
 }
 
 // Get facing direction as degrees

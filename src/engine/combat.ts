@@ -1,5 +1,3 @@
-// BattleTech Combat Engine - Accurate to Classic CBT Rules
-
 import type { Unit, Weapon, HexCoord, AttackResult, CriticalResult, Hex } from '@/types/battletech';
 import { 
   BIPED_FRONT_HIT_TABLE, 
@@ -11,9 +9,79 @@ import {
   HEAT_SCALE_EFFECTS,
   Arc, 
   UnitType, 
-  Config 
+  Config,
+  MovementMode,
+  WeaponType
 } from '@/types/battletech';
 import { roll2d6, d6, clusterHits } from './dice';
+import { TERRAIN_TYPES, hasLineOfSight } from './hexgrid';
+
+// BattleTech Combat Engine - Accurate to Classic CBT Rules
+
+// Add terrain-based to-hit modifiers
+export function getTerrainModifier(hex: Hex | undefined): number {
+  if (!hex) return 0;
+  const terrain = TERRAIN_TYPES[hex.terrain];
+  return terrain ? terrain.toHitModifier : 0;
+}
+
+export function getElevationModifier(attackerHex?: Hex, targetHex?: Hex): number {
+  if (!attackerHex || !targetHex) return 0;
+  if (attackerHex.elevation > targetHex.elevation) return -1;
+  if (attackerHex.elevation < targetHex.elevation) return 1;
+  return 0;
+}
+
+export function getAttackerMovementModifier(movementMode: MovementMode): number {
+  switch (movementMode) {
+    case MovementMode.WALKING:
+      return 0;
+    case MovementMode.RUNNING:
+      return 2;
+    case MovementMode.JUMPING:
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+export function getTargetMovementModifier(targetMoved: boolean, target: Unit): number {
+  if (!targetMoved) return 0;
+  switch (target.movementMode) {
+    case MovementMode.WALKING:
+      return 1;
+    case MovementMode.RUNNING:
+      return 2;
+    case MovementMode.JUMPING:
+      return 3;
+    case MovementMode.IMMOBILE:
+      return -4;
+    default:
+      return 0;
+  }
+}
+
+export function getECMModifier(target: Unit): number {
+  return target.hasECM ? 1 : 0;
+}
+
+export function getAMSModifier(target: Unit, weapon: Weapon): number {
+  if (!target.hasAMS || !target.amsActive || weapon.type !== WeaponType.MISSILE) return 0;
+  const rating = target.amsRating ?? 2;
+  // Scale AMS to-hit penalty with rating (1 -> +1, 2 -> +2, up to +4)
+  return Math.min(4, Math.max(1, Math.floor(rating)));
+}
+
+export function consumeAmmo(unit: Unit, weapon: Weapon): void {
+  if (weapon.shotsRemaining === 999 || weapon.shotsRemaining === Infinity) return;
+
+  weapon.shotsRemaining = Math.max(0, weapon.shotsRemaining - 1);
+  const ammoEntry = unit.ammo.find(ammo => ammo.location === weapon.location || weapon.name.includes(ammo.type));
+
+  if (ammoEntry && ammoEntry.shots > 0) {
+    ammoEntry.shots = Math.max(0, ammoEntry.shots - 1);
+  }
+}
 
 // Calculate distance between two hex coordinates
 export function hexDistance(a: HexCoord, b: HexCoord): number {
@@ -36,21 +104,24 @@ export function getRangeBand(weapon: Weapon, distance: number): string {
 // Get range modifier
 export function getRangeModifier(weapon: Weapon, distance: number): number {
   const band = getRangeBand(weapon, distance);
-  if (band === 'minimum') return -1;
   if (band === 'out') return -1;
-  return RANGE_MODIFIERS[band];
+  return RANGE_MODIFIERS[band as keyof typeof RANGE_MODIFIERS];
 }
 
 // Determine attack arc based on facing and target position
 export function determineArc(attacker: Unit, target: Unit): Arc {
   if (!attacker.position || !target.position) return Arc.FRONT;
-  
-  const dx = target.position.q - attacker.position.q;
-  const dy = target.position.r - attacker.position.r;
+
+  // Compute angle from target to attacker so we can determine the arc on the target
+  const dx = attacker.position.q - target.position.q;
+  const dy = attacker.position.r - target.position.r;
   const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-  
-  const relativeAngle = (angle - attacker.facing * 60 + 360) % 360;
-  
+
+  // Use torsoFacing if available, otherwise use unit facing
+  const facingRef = (typeof target.torsoFacing === 'number') ? target.torsoFacing : target.facing;
+
+  const relativeAngle = (angle - facingRef * 60 + 360) % 360;
+
   if (relativeAngle >= 300 || relativeAngle <= 60) return Arc.FRONT;
   if (relativeAngle > 60 && relativeAngle < 120) return Arc.RIGHT;
   if (relativeAngle >= 120 && relativeAngle <= 240) return Arc.REAR;
@@ -71,7 +142,23 @@ export function getHitLocation(roll: number, unit: Unit, arc: Arc): string {
     return BIPED_REAR_HIT_TABLE[roll] || 'CT';
   }
   
-  return BIPED_FRONT_HIT_TABLE[roll] || 'CT';
+  // Base front table result
+  let base = BIPED_FRONT_HIT_TABLE[roll] || 'CT';
+
+  // If the unit has a torso twist (torsoFacing different from facing), bias CT results
+  // toward the twisted side (more exposed). This increases chance to hit side torso.
+  const torsoFacing = typeof unit.torsoFacing === 'number' ? unit.torsoFacing : unit.facing;
+  const diff = (torsoFacing - unit.facing + 6) % 6; // 0..5
+
+  if (base === 'CT' && diff !== 0) {
+    // diff 1-3 -> twisted clockwise (right side exposed), diff 4-5 -> counter-clockwise (left exposed)
+    const favorRight = diff >= 1 && diff <= 3;
+    if (Math.random() < 0.45) {
+      base = favorRight ? 'RT' : 'LT';
+    }
+  }
+
+  return base;
 }
 
 // Calculate to-hit modifiers
@@ -81,7 +168,10 @@ export function calculateToHitModifiers(
   weapon: Weapon,
   distance: number,
   attackerMoved: boolean,
-  targetMoved: boolean
+  targetMoved: boolean,
+  terrainModifier: number = 0,
+  attackerHex?: Hex,
+  targetHex?: Hex
 ): { targetNumber: number; modifiers: { [key: string]: number }; canFire: boolean } {
   const modifiers: { [key: string]: number } = {};
   
@@ -101,31 +191,15 @@ export function calculateToHitModifiers(
   }
   modifiers['Range'] = rangeMod;
   
-  let targetMoveMod = 0;
-  if (targetMoved) {
-    switch (target.movementMode) {
-      case 'walking': targetMoveMod = 1; break;
-      case 'running': targetMoveMod = 2; break;
-      case 'jumping': targetMoveMod = 3; break;
-      case 'immobile': targetMoveMod = -4; break;
-    }
-  }
-  modifiers['Target Movement'] = targetMoveMod;
-  
-  let attackerMoveMod = 0;
-  if (attackerMoved) {
-    switch (attacker.movementMode) {
-      case 'walking': attackerMoveMod = 0; break;
-      case 'running': attackerMoveMod = 2; break;
-      case 'jumping': attackerMoveMod = 3; break;
-    }
-  }
-  modifiers['Attacker Movement'] = attackerMoveMod;
-  
-  const heatEffect = getHeatEffect(attacker.heat);
-  modifiers['Heat'] = heatEffect.toHitMod;
-  
+  modifiers['Target Movement'] = getTargetMovementModifier(targetMoved, target);
+  modifiers['Attacker Movement'] = attackerMoved ? getAttackerMovementModifier(attacker.movementMode) : 0;
+  modifiers['Heat'] = getHeatEffect(attacker.heat).toHitMod;
   modifiers['Sensors'] = attacker.sensorHits * 2;
+  modifiers['Terrain'] = terrainModifier;
+  modifiers['Elevation'] = getElevationModifier(attackerHex, targetHex);
+  modifiers['ECM'] = getECMModifier(target);
+  modifiers['AMS'] = getAMSModifier(target, weapon);
+  modifiers['Prone'] = target.prone ? 1 : 0;
   
   let damageMod = 0;
   if (weapon.location === 'RA' || weapon.location === 'RT') {
@@ -155,7 +229,7 @@ export function calculateToHitModifiers(
   const targetNumber = Object.values(modifiers).reduce((sum, mod) => sum + mod, 0);
   
   return { 
-    targetNumber: Math.max(2, Math.min(12, targetNumber)), 
+    targetNumber: Math.max(2, targetNumber), 
     modifiers, 
     canFire: true 
   };
@@ -182,7 +256,10 @@ export function resolveAttack(
   attacker: Unit,
   target: Unit,
   weapon: Weapon,
-  distance: number
+  distance: number,
+  terrainModifier: number = 0,
+  attackerHex?: Hex,
+  targetHex?: Hex
 ): AttackResult {
   if (!attacker.alive || attacker.shutdown || attacker.prone || attacker.heat >= 30) {
     return {
@@ -198,7 +275,7 @@ export function resolveAttack(
     };
   }
 
-  if (weapon.shotsRemaining <= 0 && weapon.shotsRemaining !== 999) {
+  if (weapon.shotsRemaining <= 0 && weapon.shotsRemaining !== 999 && weapon.shotsRemaining !== Infinity) {
     return {
       hit: false,
       roll: 0,
@@ -212,21 +289,24 @@ export function resolveAttack(
     };
   }
 
-  const attackerMoved = attacker.currentMP < (attacker.movementMode === 'running'
+  const attackerMoved = attacker.currentMP < (attacker.movementMode === MovementMode.RUNNING
     ? attacker.runningMP
-    : attacker.movementMode === 'jumping'
+    : attacker.movementMode === MovementMode.JUMPING
       ? attacker.jumpingMP
       : attacker.walkingMP);
-  const targetMoved = target.currentMP < (target.movementMode === 'running'
+  const targetMoved = target.currentMP < (target.movementMode === MovementMode.RUNNING
     ? target.runningMP
-    : target.movementMode === 'jumping'
+    : target.movementMode === MovementMode.JUMPING
       ? target.jumpingMP
       : target.walkingMP);
 
   const { targetNumber, canFire } = calculateToHitModifiers(
-    attacker, target, weapon, distance, 
+    attacker, target, weapon, distance,
     attackerMoved,
-    targetMoved
+    targetMoved,
+    terrainModifier,
+    attackerHex,
+    targetHex
   );
   
   if (!canFire) {
@@ -242,13 +322,13 @@ export function resolveAttack(
       fired: false
     };
   }
+
+  if (weapon.shotsRemaining !== 999 && weapon.shotsRemaining !== Infinity) {
+    consumeAmmo(attacker, weapon);
+  }
   
   const roll = roll2d6();
   const hit = roll >= targetNumber;
-  
-  if (hit && weapon.shotsRemaining !== 999) {
-    weapon.shotsRemaining--;
-  }
   
   if (!hit) {
     return {
@@ -269,18 +349,51 @@ export function resolveAttack(
   const location = getHitLocation(locationRoll, target, arc);
   
   let damage = weapon.damage;
+  let amsIntercepted = 0;
   
-  if (weapon.type === 'missile' && (weapon.name.includes('LRM') || weapon.name.includes('SRM'))) {
+  if (weapon.type === WeaponType.MISSILE && (weapon.name.includes('LRM') || weapon.name.includes('SRM'))) {
     const missileCount = parseInt(weapon.name.match(/\d+/)?.[0] || '1');
     const clusterRoll = roll2d6();
-    const hits = clusterHits(missileCount, clusterRoll);
-    damage = hits * (weapon.name.includes('SRM') ? 2 : 1);
+    let hits = clusterHits(missileCount, clusterRoll);
+
+    // AMS interception: per-missile interception rolls, consumes AMS ammo and generates heat
+    let amsIntercepted = 0;
+    if (target.hasAMS && target.amsActive) {
+      const rating = target.amsRating ?? 2;
+      const perMissileChance = Math.min(0.9, 0.12 * rating);
+      // available AMS rounds (Infinity if undefined)
+      let availableAMS = target.amsAmmo === undefined ? Infinity : Math.max(0, Math.floor(target.amsAmmo));
+
+      for (let i = 0; i < hits; i++) {
+        if (availableAMS <= 0) break;
+        if (Math.random() < perMissileChance) {
+          amsIntercepted++;
+          availableAMS--;
+          // AMS firing generates a small amount of heat
+          target.heat = (target.heat || 0) + 1;
+        }
+      }
+
+      // write back remaining AMS ammo if it was finite
+      if (isFinite(availableAMS)) {
+        target.amsAmmo = availableAMS;
+      }
+
+      hits = Math.max(0, hits - amsIntercepted);
+    }
+
+    damage = hits * 2;
   }
   
   const { damageDealt, criticals, ammoExplosion, destroyed } = applyDamage(target, location, damage, roll === 2);
-  
+
   const isTAC = roll === 2 && location !== 'HD';
-  
+
+  // Add AMS note if applicable
+  const amsNote = weapon.type === WeaponType.MISSILE && target.hasAMS
+    ? ` AMS intercepted ${amsIntercepted} missiles (rating ${target.amsRating ?? 2}).`
+    : '';
+
   return {
     hit: true,
     roll,
@@ -289,7 +402,7 @@ export function resolveAttack(
     damage: damageDealt,
     criticals,
     ammoExplosion,
-    message: `${weapon.name} HIT ${location} for ${damageDealt} damage (rolled ${roll} vs ${targetNumber})${isTAC ? ' - THROUGH ARMOR CRITICAL!' : ''}${destroyed ? ' - UNIT DESTROYED!' : ''}`,
+    message: `${weapon.name} HIT ${location} for ${damageDealt} damage (rolled ${roll} vs ${targetNumber})${isTAC ? ' - THROUGH ARMOR CRITICAL!' : ''}${destroyed ? ' - UNIT DESTROYED!' : ''}${amsNote}`,
     fired: true
   };
 }
@@ -387,29 +500,34 @@ export function resolveCriticalHits(unit: Unit, location: string, numCrits: numb
   const loc = unit.locations.get(location);
   if (!loc) return criticals;
   
-  for (let i = 0; i < numCrits; i++) {
+  const selectCriticalSlot = (): number => {
     const firstDie = d6();
     const secondDie = d6();
-    
     const slotSet = firstDie <= 3 ? 0 : 6;
-    const slot = slotSet + secondDie - 1;
-    
-    if (slot < loc.criticals.length) {
-      const crit = loc.criticals[slot];
-      
-      if (crit.item && !crit.hit) {
-        crit.hit = true;
-        
-        const effect = applyCriticalEffect(unit, location, crit.item);
-        
-        criticals.push({
-          location,
-          slot,
-          item: crit.item,
-          effect
-        });
-      }
+    return slotSet + secondDie - 1;
+  };
+
+  for (let i = 0; i < numCrits; i++) {
+    let slot = selectCriticalSlot();
+    let attempts = 0;
+
+    while (attempts < loc.criticals.length && (slot >= loc.criticals.length || loc.criticals[slot].hit || !loc.criticals[slot].item || loc.criticals[slot].item === 'None')) {
+      slot = (slot + 1) % loc.criticals.length;
+      attempts += 1;
     }
+
+    if (slot >= loc.criticals.length) continue;
+    const crit = loc.criticals[slot];
+    if (!crit || crit.hit || !crit.item || crit.item === 'None') continue;
+
+    crit.hit = true;
+    const effect = applyCriticalEffect(unit, location, crit.item);
+    criticals.push({
+      location,
+      slot,
+      item: crit.item,
+      effect
+    });
   }
   
   return criticals;
@@ -574,18 +692,22 @@ export function getValidTargetHexes(unit: Unit, hexGrid: Map<string, Hex>, allUn
   
   for (const [, hex] of hexGrid) {
     const distance = hexDistance(unit.position, hex.coord);
-    if (distance <= maxRange) {
-      const enemyUnit = allUnits.find(u => 
-        u.position && 
-        u.position.q === hex.coord.q && 
-        u.position.r === hex.coord.r && 
-        u.alive && 
-        u.id !== unit.id
-      );
-      
-      if (enemyUnit) {
-        validHexes.push(hex.coord);
-      }
+    if (distance > maxRange) continue;
+    if (!hasLineOfSight(unit.position, hex.coord, hexGrid)) continue;
+
+    const enemyUnit = allUnits.find(u => 
+      u.position && 
+      u.position.q === hex.coord.q && 
+      u.position.r === hex.coord.r && 
+      u.alive && 
+      u.id !== unit.id
+    );
+    
+    if (!enemyUnit) continue;
+
+    const weaponInRange = unit.weapons.some(weapon => getRangeModifier(weapon, distance) !== -1);
+    if (weaponInRange) {
+      validHexes.push(hex.coord);
     }
   }
   

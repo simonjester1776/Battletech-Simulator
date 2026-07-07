@@ -9,6 +9,7 @@ import {
   selectUnit, 
   moveSelectedUnit,
   selectTarget,
+  fireWeapon,
   fireAllWeapons,
   executePunchAttack,
   executeKickAttack,
@@ -17,6 +18,9 @@ import {
   endCombatPhase,
   endHeatPhase,
   executeAITurn,
+  performTorsoTwist,
+  toggleAMSActive,
+  evaluateMissionObjective,
   checkGameOver
 } from '@/engine/game';
 import { getHexKey } from '@/engine/hexgrid';
@@ -35,6 +39,7 @@ import {
 } from '@/lib/mission-objectives';
 
 import { MainMenu } from '@/screens/MainMenu';
+import { toast } from 'sonner';
 import { UnitSetup } from '@/screens/UnitSetup';
 import { BattleScreen } from '@/screens/BattleScreen';
 import { CampaignScreen } from '@/components/CampaignScreen';
@@ -47,12 +52,13 @@ type AppScreen = 'main-menu' | 'setup' | 'game' | 'campaign' | 'multiplayer-lobb
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('main-menu');
-  const [gameMode] = useState<GameMode>('hotseat');
+  const [gameMode, setGameMode] = useState<GameMode>('hotseat');
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [gameOver, setGameOver] = useState<{ gameOver: boolean; winner: 'player' | 'ai' | 'draw' | null } | null>(null);
   
   const [campaignManager, setCampaignManager] = useState<CampaignManager | null>(null);
   const [currentContract, setCurrentContract] = useState<Contract | null>(null);
+  const [battleResultsProcessed, setBattleResultsProcessed] = useState(false);
   
   const initialUnits = getAllUnitsAndVehicles();
   const [availableUnits, setAvailableUnits] = useState<Unit[]>(initialUnits);
@@ -66,9 +72,6 @@ function App() {
     initialUnits.find(u => u.name.toLowerCase().includes('marauder'))?.id
   ].filter(Boolean) as string[]);
   
-  const [missionObjectives, setMissionObjectives] = useState<MissionObjective[]>([
-    generateEliminationMission()
-  ]);
 
   const generateMissionObjectives = useCallback(
     (playerUnits: Unit[], aiUnits: Unit[], contract?: Contract): MissionObjective[] => {
@@ -134,15 +137,33 @@ function App() {
   }, [gameState]);
   
   useEffect(() => {
-    if (!gameOver?.gameOver || !currentContract || !campaignManager) return;
+    if (!gameOver?.gameOver || !currentContract || !campaignManager || !gameState) return;
 
-    const contractSuccess = gameOver.winner === 'player';
+    if (!battleResultsProcessed) {
+      let enemyUnits = gameState.units.slice(Math.min(playerSelections.length, gameState.units.length));
+      if (enemyUnits.length === 0) {
+        enemyUnits = gameState.units.slice(Math.floor(gameState.units.length / 2));
+      }
+      const destroyedEnemyUnits = enemyUnits.filter(unit => !unit.alive);
+      campaignManager.processBattleResults(destroyedEnemyUnits, []);
+      setBattleResultsProcessed(true);
+    }
+
+    const objectiveResult = evaluateMissionObjective(gameState, false);
+    const contractSuccess = objectiveResult.gameOver && objectiveResult.winner === 'player';
     campaignManager.completeContract(currentContract.id, contractSuccess);
     setCampaignManager(Object.assign(Object.create(Object.getPrototypeOf(campaignManager)), campaignManager));
     setCurrentContract(null);
-  }, [gameOver, currentContract, campaignManager]);
+  }, [gameOver, currentContract, campaignManager, gameState, battleResultsProcessed, playerSelections]);
   
   // Game initialization and management
+  const syncGameState = useCallback((state: GameState): GameState => {
+    evaluateMissionObjective(state);
+    const result = checkGameOver(state);
+    setGameOver(result.gameOver ? result : null);
+    return state;
+  }, []);
+
   const startGame = useCallback(() => {
     const playerUnits = playerSelections.map(id => {
       const template = availableUnits.find(u => u.id === id);
@@ -155,21 +176,18 @@ function App() {
     });
     
     const newObjectives = generateMissionObjectives(playerUnits, aiUnits, currentContract ?? undefined).map(objective => ({ ...objective }));
-    setMissionObjectives(newObjectives);
     const newGame = initializeGame(playerUnits, aiUnits, newObjectives);
-    setGameState(newGame);
+    setGameState(syncGameState(newGame));
     setCurrentScreen('game');
-    setGameOver(null);
-    
-    // Log for debugging
-    console.log('Game mode:', gameMode, 'Contract:', currentContract);
-  }, [playerSelections, aiSelections, availableUnits, gameMode, currentContract]);
+    setBattleResultsProcessed(false);
+  }, [playerSelections, aiSelections, availableUnits, gameMode, currentContract, syncGameState]);
   
   const restartGame = useCallback(() => {
     setGameState(null);
     setCurrentScreen('main-menu');
     setGameOver(null);
     setCurrentContract(null);
+    setBattleResultsProcessed(false);
   }, []);
   
   const startCampaign = useCallback(() => {
@@ -185,6 +203,8 @@ function App() {
     startingMechs.forEach(mech => {
       manager.addMech(cloneUnit(mech), 100);
     });
+
+    manager.generateContractOffers(5);
     
     setCampaignManager(manager);
     setCurrentScreen('campaign');
@@ -194,13 +214,18 @@ function App() {
     setCurrentContract(contract);
     setCurrentScreen('setup');
   }, []);
+
+  const handleStartNetworkGame = useCallback((_roomId: string, _isHost: boolean, _playerId: string) => {
+    setGameMode('network');
+    setCurrentScreen('setup');
+  }, []);
   
   // Game action handlers
   const handleRollInitiative = useCallback(() => {
     if (!gameState) return;
     const { state } = rollInitiative(gameState);
-    setGameState(state);
-  }, [gameState]);
+    setGameState(syncGameState(state));
+  }, [gameState, syncGameState]);
   
   const handleHexClick = useCallback((hex: Hex) => {
     if (!gameState) return;
@@ -246,20 +271,20 @@ function App() {
   const handleEndMovement = useCallback(() => {
     if (!gameState) return;
     const newState = endMovementPhase(gameState);
-    setGameState(newState);
-  }, [gameState]);
+    setGameState(syncGameState(newState));
+  }, [gameState, syncGameState]);
   
   const handleEndCombat = useCallback(() => {
     if (!gameState) return;
     const newState = endCombatPhase(gameState);
-    setGameState(newState);
-  }, [gameState]);
+    setGameState(syncGameState(newState));
+  }, [gameState, syncGameState]);
   
   const handleEndHeat = useCallback(() => {
     if (!gameState) return;
     const newState = endHeatPhase(gameState);
-    setGameState(newState);
-  }, [gameState]);
+    setGameState(syncGameState(newState));
+  }, [gameState, syncGameState]);
   
   const handleMovementModeChange = useCallback((mode: MovementMode) => {
     if (!gameState || !gameState.selectedUnit) return;
@@ -271,35 +296,77 @@ function App() {
     setGameState({ ...gameState });
   }, [gameState]);
   
+  const handleFireWeapon = useCallback((weaponId: string) => {
+    if (!gameState) return;
+    const newState = fireWeapon(gameState, weaponId);
+    setGameState(syncGameState(newState));
+
+    // show immediate toast with latest log entry
+    const last = newState.gameLog && newState.gameLog.length > 0 ? newState.gameLog[newState.gameLog.length - 1] : null;
+    if (last) {
+      switch (last.type) {
+        case 'combat':
+          toast.success(last.message);
+          break;
+        case 'critical':
+          toast.error(last.message);
+          break;
+        case 'heat':
+          toast.warning(last.message);
+          break;
+        case 'movement':
+          toast(last.message);
+          break;
+        case 'system':
+        default:
+          toast.info(last.message);
+          break;
+      }
+    }
+  }, [gameState, syncGameState]);
+
   const handleFireAllWeapons = useCallback(() => {
     if (!gameState) return;
     const newState = fireAllWeapons(gameState);
-    setGameState(newState);
-  }, [gameState]);
+    setGameState(syncGameState(newState));
+  }, [gameState, syncGameState]);
+  
+  const handleToggleAMS = useCallback(() => {
+    if (!gameState || !gameState.selectedUnit) return;
+    const newState = toggleAMSActive(gameState, gameState.selectedUnit.id);
+    setGameState(syncGameState(newState));
+  }, [gameState, syncGameState]);
   
   const handlePunchAttack = useCallback(() => {
     if (!gameState) return;
     const newState = executePunchAttack(gameState);
-    setGameState(newState);
-  }, [gameState]);
+    setGameState(syncGameState(newState));
+  }, [gameState, syncGameState]);
   
   const handleKickAttack = useCallback(() => {
     if (!gameState) return;
     const newState = executeKickAttack(gameState);
-    setGameState(newState);
-  }, [gameState]);
+    setGameState(syncGameState(newState));
+  }, [gameState, syncGameState]);
   
   const handleDFAAttack = useCallback(() => {
     if (!gameState) return;
     const newState = executeDFAAttack(gameState);
-    setGameState(newState);
-  }, [gameState]);
+    setGameState(syncGameState(newState));
+  }, [gameState, syncGameState]);
   
+  const handleTorsoTwist = useCallback((direction: 'left' | 'right') => {
+    if (!gameState || !gameState.selectedUnit) return;
+    const steps = direction === 'left' ? -1 : 1;
+    const newState = performTorsoTwist(gameState, gameState.selectedUnit.id, steps);
+    setGameState(syncGameState(newState));
+  }, [gameState, syncGameState]);
+
   const handleAIturn = useCallback(() => {
     if (!gameState) return;
     const newState = executeAITurn(gameState);
-    setGameState(newState);
-  }, [gameState]);
+    setGameState(syncGameState(newState));
+  }, [gameState, syncGameState]);
   
   // Screen rendering
   if (currentScreen === 'main-menu') {
@@ -335,7 +402,8 @@ function App() {
   if (currentScreen === 'multiplayer-lobby') {
     return (
       <MultiplayerLobby
-        onStartGame={(_mode: GameMode, _config: any) => {
+        onStartGame={(mode: GameMode, _config: unknown) => {
+          setGameMode(mode);
           setCurrentScreen('setup');
         }}
         onBack={() => setCurrentScreen('main-menu')}
@@ -346,11 +414,7 @@ function App() {
   if (currentScreen === 'network-lobby') {
     return (
       <NetworkMultiplayerLobby
-        onStartGame={(roomId: string, isHost: boolean, playerId: string) => {
-          console.log('Network game starting:', { roomId, isHost, playerId });
-          // TODO: Pass network info to game state
-          setCurrentScreen('setup');
-        }}
+        onStartGame={handleStartNetworkGame}
         onBack={() => setCurrentScreen('main-menu')}
       />
     );
@@ -360,7 +424,6 @@ function App() {
     return (
       <MechLab
         onSave={(customMech) => {
-          console.log('Saved custom mech:', customMech);
           setAvailableUnits(prev => [...prev, customMech]);
           setPlayerSelections(prev => [...prev, customMech.id]);
           setCurrentScreen('setup');
@@ -376,6 +439,7 @@ function App() {
         availableUnits={availableUnits}
         playerSelections={playerSelections}
         aiSelections={aiSelections}
+        contract={currentContract}
         onPlayerSelectionChange={setPlayerSelections}
         onAiSelectionChange={setAiSelections}
         onStartGame={startGame}
@@ -399,6 +463,9 @@ function App() {
         onPunchAttack={handlePunchAttack}
         onKickAttack={handleKickAttack}
         onDFAAttack={handleDFAAttack}
+        onTorsoTwist={handleTorsoTwist}
+        onToggleAMS={handleToggleAMS}
+        onFireWeapon={handleFireWeapon}
         onRestart={restartGame}
         onAIturn={handleAIturn}
         onBack={() => {
@@ -406,12 +473,12 @@ function App() {
           setCurrentContract(null);
         }}
         gameOver={gameOver}
-        objectives={missionObjectives}
+        objectives={gameState?.objectives ?? []}
         contract={currentContract}
       />
     );
   }
-  
+
   // Fallback
   return null;
 }

@@ -126,6 +126,10 @@ export interface Unit {
   // Special systems
   hasECM: boolean;
   hasAMS: boolean;
+  amsRating?: number; // 0 = none, higher = better interception
+  amsAmmo?: number; // ammo rounds available for AMS interception (optional)
+  amsActive?: boolean; // whether AMS is active
+  amsHeat?: number; // accumulated heat from AMS firing
   hasCASE: boolean;
   hasXLEngine: boolean;
   hasXXLEngine: boolean;
@@ -151,6 +155,9 @@ export interface Unit {
   // Position
   position: HexCoord | null;
   facing: number;
+  torsoFacing?: number; // torso orientation (0-5, each 60deg)
+  torsoTwistsThisTurn?: number; // number of torso twists used this turn
+  maxTorsoTwists?: number; // maximum torso twists allowed per turn
 }
 
 export interface HexCoord {
@@ -354,6 +361,7 @@ export const MOVEMENT_MODIFIERS: { [mode: string]: number } = {
 
 // Range Modifiers
 export const RANGE_MODIFIERS: { [band: string]: number } = {
+  'minimum': -4,
   'short': 0,
   'medium': 2,
   'long': 4,

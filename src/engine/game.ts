@@ -2,8 +2,8 @@
 
 import type { GameState, Unit, HexCoord, Hex, LogEntry } from '@/types/battletech';
 import { GamePhase, MovementMode } from '@/types/battletech';
-import { createHexGrid, getHex, setHex, getValidMovementHexes, moveUnit, TERRAIN_TYPES } from './hexgrid';
-import { getValidTargetHexes, resolveAttack, resolveHeatPhase, hexDistance, getRangeModifier } from './combat';
+import { createHexGrid, getHex, setHex, getValidMovementHexes, moveUnit, TERRAIN_TYPES, hasLineOfSight } from './hexgrid';
+import { getValidTargetHexes, resolveAttack, resolveHeatPhase, hexDistance, getRangeModifier, getTerrainModifier } from './combat';
 import { executePunch, executeKick, executeDFA } from './advanced-combat';
 import { roll2d6 } from './dice';
 import { cloneUnit } from './units';
@@ -21,6 +21,14 @@ export function initializeGame(playerUnits: Unit[], aiUnits: Unit[], objectives:
   clonedPlayerUnits.forEach((unit, index) => {
     unit.position = { q: -5 + index * 2, r: 5, s: -(-5 + index * 2) - 5 };
     unit.facing = 0;
+    unit.torsoFacing = unit.facing;
+    unit.torsoTwistsThisTurn = 0;
+    unit.maxTorsoTwists = unit.maxTorsoTwists ?? 1;
+    unit.amsActive = unit.hasAMS ? (unit.amsActive ?? true) : false;
+    unit.amsHeat = unit.amsHeat ?? 0;
+    if (unit.hasAMS && unit.amsAmmo === undefined) {
+      unit.amsAmmo = 10;
+    }
     
     const hex = getHex(grid, unit.position);
     if (hex) {
@@ -33,6 +41,14 @@ export function initializeGame(playerUnits: Unit[], aiUnits: Unit[], objectives:
   clonedAiUnits.forEach((unit, index) => {
     unit.position = { q: 5 - index * 2, r: -5, s: -(5 - index * 2) - (-5) };
     unit.facing = 3;
+    unit.torsoFacing = unit.facing;
+    unit.torsoTwistsThisTurn = 0;
+    unit.maxTorsoTwists = unit.maxTorsoTwists ?? 1;
+    unit.amsActive = unit.hasAMS ? (unit.amsActive ?? true) : false;
+    unit.amsHeat = unit.amsHeat ?? 0;
+    if (unit.hasAMS && unit.amsAmmo === undefined) {
+      unit.amsAmmo = 10;
+    }
     
     const hex = getHex(grid, unit.position);
     if (hex) {
@@ -189,7 +205,16 @@ export function fireWeapon(
   if (!weapon) return state;
   
   const distance = hexDistance(attacker.position, target.position);
-  const result = resolveAttack(attacker, target, weapon, distance);
+  const attackerHex = getHex(newState.hexGrid, attacker.position);
+  const targetHex = getHex(newState.hexGrid, target.position);
+  const terrainModifier = getTerrainModifier(targetHex);
+  
+  if (!hasLineOfSight(attacker.position, target.position, newState.hexGrid)) {
+    addLogEntry(newState, `${attacker.name} cannot fire at ${target.name}: line of sight is blocked.`, 'info');
+    return newState;
+  }
+
+  const result = resolveAttack(attacker, target, weapon, distance, terrainModifier, attackerHex, targetHex);
   
   if (result.fired !== false) {
     attacker.heat += weapon.heat;
@@ -244,7 +269,7 @@ export function fireAllWeapons(state: GameState): GameState {
   }
   
   const rangeFilteredWeapons = attacker.weapons
-    .filter(weapon => weapon.damage > 0 && (weapon.shotsRemaining > 0 || weapon.shotsRemaining === 999))
+    .filter(weapon => weapon.damage > 0 && (weapon.shotsRemaining > 0 || weapon.shotsRemaining === 999 || weapon.shotsRemaining === Infinity))
     .filter(weapon => getRangeModifier(weapon, hexDistance(attacker.position!, target.position!)) !== -1);
   
   for (const weapon of rangeFilteredWeapons) {
@@ -455,7 +480,7 @@ export function resolveHeatPhaseForAll(state: GameState): GameState {
   return newState;
 }
 
-function evaluateMissionObjective(
+export function evaluateMissionObjective(
   state: GameState,
   mutateState: boolean = true
 ): { gameOver: boolean; winner: 'player' | 'ai' | 'draw' | null } {
@@ -614,6 +639,8 @@ export function endHeatPhase(state: GameState): GameState {
     if (unit.alive) {
       unit.movementMode = MovementMode.STANDING;
       unit.currentMP = unit.walkingMP;
+      // reset torso twist usage each turn
+      unit.torsoTwistsThisTurn = 0;
     }
   });
 
@@ -621,8 +648,9 @@ export function endHeatPhase(state: GameState): GameState {
   
   const objectiveResult = evaluateMissionObjective(newState);
   if (objectiveResult.gameOver) {
+    newState.phase = GamePhase.END;
     addLogEntry(newState, objectiveResult.winner === 'player' ? 'Mission objectives complete!' : 'A required mission objective failed.', objectiveResult.winner === 'player' ? 'system' : 'critical');
- }
+  }
   
   return newState;
 }
@@ -667,7 +695,7 @@ export function checkGameOver(state: GameState): { gameOver: boolean; winner: 'p
 }
 
 // AI Turn - Movement and combat AI
-function getBestAIWeaponTarget(aiUnit: Unit, enemies: Unit[]): Unit | null {
+function getBestAIWeaponTarget(aiUnit: Unit, enemies: Unit[], grid: Map<string, Hex>): Unit | null {
   if (!aiUnit.position) return null;
 
   let bestTarget: Unit | null = null;
@@ -675,33 +703,45 @@ function getBestAIWeaponTarget(aiUnit: Unit, enemies: Unit[]): Unit | null {
 
   for (const enemy of enemies) {
     if (!enemy.position) continue;
+    if (!hasLineOfSight(aiUnit.position, enemy.position, grid)) continue;
 
     const distance = hexDistance(aiUnit.position, enemy.position);
     const weaponsInRange = aiUnit.weapons.filter(
-      weapon => getRangeModifier(weapon, distance) !== -1 && (weapon.shotsRemaining > 0 || weapon.shotsRemaining === 999)
+      weapon => getRangeModifier(weapon, distance) !== -1 && (weapon.shotsRemaining > 0 || weapon.shotsRemaining === 999 || weapon.shotsRemaining === Infinity)
     );
 
     if (weaponsInRange.length === 0) continue;
 
+    const targetHex = getHex(grid, enemy.position);
+    const coverPenalty = targetHex ? TERRAIN_TYPES[targetHex.terrain].toHitModifier * 5 : 0;
     const totalArmor = Array.from(enemy.locations.values()).reduce((sum, loc) => sum + loc.armor, 0);
     const totalStructure = Array.from(enemy.locations.values()).reduce((sum, loc) => sum + loc.structure, 0);
     const totalHealth = totalArmor + totalStructure;
     const potentialDamage = weaponsInRange.reduce((sum, weapon) => sum + weapon.damage, 0);
-    const pilotPenalty = enemy.pilot.hits * 7;
+    const hitEfficiency = weaponsInRange.reduce((sum, weapon) => sum + weapon.damage / Math.max(1, weapon.heat), 0);
+    const amsPenalty = enemy.hasAMS ?  -Math.max(12, Math.floor(potentialDamage * 0.6)) : 0;
+    const pilotPenalty = enemy.pilot.hits * 6;
     const distancePenalty = Math.abs(distance - 3) * 8;
     const overheatBonus = enemy.heat >= 18 ? 12 : 0;
-    const valueBonus = enemy.bv2 * 0.035;
+    const valueBonus = enemy.bv2 * 0.04;
+    const structureThreat = enemy.pilot.hits > 0 ? 10 : 0;
 
     const score =
-      potentialDamage * 0.9 +
+      hitEfficiency * 2.2 +
+      potentialDamage * 0.7 +
       valueBonus -
-      totalHealth * 0.3 -
+      totalHealth * 0.22 -
+      coverPenalty -
       pilotPenalty -
       distancePenalty +
-      overheatBonus;
+      overheatBonus +
+      structureThreat;
 
-    if (score > bestScore) {
-      bestScore = score;
+    // Apply AMS penalty (deprioritize missile-heavy targets)
+    const finalScore = score + amsPenalty;
+
+    if (finalScore > bestScore) {
+      bestScore = finalScore;
       bestTarget = enemy;
     }
   }
@@ -712,17 +752,21 @@ function getBestAIWeaponTarget(aiUnit: Unit, enemies: Unit[]): Unit | null {
 function getBestMovementHex(aiUnit: Unit, enemy: Unit, validHexes: HexCoord[], grid: Map<string, Hex>): HexCoord | null {
   let bestHex: HexCoord | null = null;
   let bestScore = -Infinity;
-  const preferredRange = 3;
+  const preferredRange = Math.min(6, Math.max(...aiUnit.weapons.map(w => w.shortRange)));
 
   for (const hex of validHexes) {
     const dist = hexDistance(hex, enemy.position!);
     const canShootFromHex = aiUnit.weapons.some(weapon => getRangeModifier(weapon, dist) !== -1);
     const terrainHex = getHex(grid, hex);
+    const targetHex = getHex(grid, enemy.position!);
     const coverBonus = terrainHex && TERRAIN_TYPES[terrainHex.terrain].coverProvided ? 18 : 0;
-    const rangeScore = canShootFromHex ? 60 - Math.abs(dist - preferredRange) * 12 : -dist * 8;
-    const approachBonus = canShootFromHex ? 0 : Math.max(0, 16 - dist * 2);
-    const heatPenalty = aiUnit.heat > 12 ? -(aiUnit.heat - 12) * 4 : 0;
-    const score = coverBonus + rangeScore + approachBonus + heatPenalty;
+    const losBonus = hasLineOfSight(hex, enemy.position!, grid) ? 20 : -20;
+    const rangeScore = canShootFromHex ? 50 - Math.abs(dist - preferredRange) * 8 : -dist * 6;
+    const threatPenalty = enemy.weapons.some(weapon => getRangeModifier(weapon, dist) !== -1) ? -10 : 0;
+    const heatPenalty = aiUnit.heat > 12 ? -(aiUnit.heat - 12) * 3 : 0;
+    const spaceBonus = dist <= 1 ? -15 : dist <= 2 ? -6 : 0;
+    const coverDefense = targetHex ? (TERRAIN_TYPES[targetHex.terrain].toHitModifier * 4) : 0;
+    const score = coverBonus + losBonus + rangeScore + heatPenalty + spaceBonus - threatPenalty - coverDefense;
 
     if (score > bestScore) {
       bestScore = score;
@@ -734,11 +778,70 @@ function getBestMovementHex(aiUnit: Unit, enemy: Unit, validHexes: HexCoord[], g
 }
 
 function chooseAIMovementMode(unit: Unit, targetDistance: number): MovementMode {
-  if (unit.heat >= 18) return MovementMode.WALKING;
+  if (unit.heat >= 18 || unit.currentMP <= 1) return MovementMode.WALKING;
   if (unit.heat >= 12) return MovementMode.WALKING;
-  if (unit.jumpingMP > 0 && targetDistance >= 5) return MovementMode.JUMPING;
-  if (unit.runningMP > unit.walkingMP && unit.currentMP > 2) return MovementMode.RUNNING;
+  if (unit.jumpingMP > 0 && targetDistance >= 5 && unit.currentMP >= 2) return MovementMode.JUMPING;
+  if (unit.runningMP > unit.walkingMP && unit.currentMP > 2 && targetDistance > 2) return MovementMode.RUNNING;
   return MovementMode.WALKING;
+}
+
+// AI helper: consider twisting torso toward target if beneficial
+function aiConsiderTorsoTwist(state: GameState, aiUnit: Unit, target: Unit): GameState {
+  if (!aiUnit.position || !target.position) return state;
+  const newState = { ...state };
+  const unit = newState.units.find(u => u.id === aiUnit.id);
+  if (!unit) return state;
+  if ((unit.torsoTwistsThisTurn ?? 0) >= (unit.maxTorsoTwists ?? 1)) return newState;
+  if (unit.currentMP <= 0) return newState;
+
+  if (!unit.position) return newState;
+  const dx = target.position.q - unit.position.q;
+  const dy = target.position.r - unit.position.r;
+  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+  const desiredFacing = Math.round(angle / 60) % 6;
+  const currentTorso = typeof unit.torsoFacing === 'number' ? unit.torsoFacing : unit.facing;
+  // compute minimal steps (clockwise positive)
+  const diff = ((desiredFacing - currentTorso + 6) % 6);
+  const stepsCW = diff <= 3 ? diff : diff - 6; // -3..3
+  if (stepsCW === 0) return newState;
+
+  // Simple heuristic: twist if target is not roughly in torso's facing and we have twists/MP
+  const stepsToApply = Math.abs(stepsCW);
+  if (stepsToApply <= 0) return newState;
+
+  // Determine nearby enemy exposure before/after twist
+  const ownIndex = newState.units.findIndex(u => u.id === unit.id);
+  const isAI = ownIndex >= newState.units.length / 2;
+  const enemies = newState.units.filter((u, i) => u.alive && u.position && u.id !== unit.id && (isAI ? i < newState.units.length / 2 : i >= newState.units.length / 2));
+
+  const withinRange = (e: Unit) => {
+    if (!e.position || !unit.position) return false;
+    return hexDistance(unit.position, e.position) <= 8; // consider threats within 8 hexes
+  };
+
+  const isFrontFor = (facingRef: number, e: Unit) => {
+    if (!e.position || !unit.position) return false;
+    const dx2 = e.position.q - unit.position.q;
+    const dy2 = e.position.r - unit.position.r;
+    const a = Math.atan2(dy2, dx2) * (180 / Math.PI);
+    const rel = (a - facingRef * 60 + 360) % 360;
+    return rel >= 300 || rel <= 60;
+  };
+
+  const countFrontBefore = enemies.filter(e => withinRange(e) && isFrontFor(currentTorso, e)).length;
+  const countFrontAfter = enemies.filter(e => withinRange(e) && isFrontFor(desiredFacing, e)).length;
+
+  // Avoid twisting if it increases frontal exposure for high-value units
+  const bvThreshold = 300;
+  if (countFrontAfter > countFrontBefore && (unit.bv2 ?? 0) > bvThreshold) {
+    return newState; // skip twist to avoid exposing valuable unit
+  }
+
+  if ((unit.torsoTwistsThisTurn ?? 0) + stepsToApply <= (unit.maxTorsoTwists ?? 1) && unit.currentMP > 0) {
+    return performTorsoTwist(newState, unit.id, stepsCW);
+  }
+
+  return newState;
 }
 
 function fireBestAIWeapons(state: GameState, attacker: Unit, target: Unit): GameState {
@@ -747,10 +850,12 @@ function fireBestAIWeapons(state: GameState, attacker: Unit, target: Unit): Game
   let newState = state;
   const distance = hexDistance(attacker.position, target.position);
   const weapons = attacker.weapons
-    .filter(weapon => weapon.damage > 0 && (weapon.shotsRemaining > 0 || weapon.shotsRemaining === 999) && getRangeModifier(weapon, distance) !== -1)
+    .filter(weapon => weapon.damage > 0 && (weapon.shotsRemaining > 0 || weapon.shotsRemaining === 999 || weapon.shotsRemaining === Infinity) && getRangeModifier(weapon, distance) !== -1)
     .sort((a, b) => {
-      const aValue = a.damage / Math.max(1, a.heat) + (a.heat <= 3 ? 2 : 0);
-      const bValue = b.damage / Math.max(1, b.heat) + (b.heat <= 3 ? 2 : 0);
+      const missilePenaltyA = (a.type === 'missile' && target.hasAMS) ? ((target.amsRating ?? 2) * 1.5) : 0;
+      const missilePenaltyB = (b.type === 'missile' && target.hasAMS) ? ((target.amsRating ?? 2) * 1.5) : 0;
+      const aValue = a.damage / Math.max(1, a.heat) + (a.heat <= 3 ? 2 : 0) + (a.type === 'missile' ? 1.5 : 0) - missilePenaltyA;
+      const bValue = b.damage / Math.max(1, b.heat) + (b.heat <= 3 ? 2 : 0) + (b.type === 'missile' ? 1.5 : 0) - missilePenaltyB;
       return bValue - aValue || b.damage - a.damage;
     });
 
@@ -800,12 +905,14 @@ export function executeAITurn(state: GameState): GameState {
       newState = selectUnit(newState, aiUnit);
       if (newState.validMoveHexes.length === 0) continue;
 
-      const movementMode = chooseAIMovementMode(aiUnit, nearestDistance);
-      const bestHex = getBestMovementHex(aiUnit, nearestEnemy, newState.validMoveHexes, newState.hexGrid);
+      const bestTarget = getBestAIWeaponTarget(aiUnit, playerUnits, newState.hexGrid) || nearestEnemy;
+      const targetDistance = bestTarget.position ? hexDistance(aiUnit.position, bestTarget.position) : nearestDistance;
+      const movementMode = chooseAIMovementMode(aiUnit, targetDistance);
+      const bestHex = getBestMovementHex(aiUnit, bestTarget, newState.validMoveHexes, newState.hexGrid);
 
       if (bestHex) {
         newState = moveSelectedUnit(newState, bestHex, movementMode);
-        addLogEntry(newState, `${aiUnit.name} advances toward ${nearestEnemy.name}`, 'system');
+        addLogEntry(newState, `${aiUnit.name} advances toward ${bestTarget.name}`, 'system');
       }
     }
   }
@@ -816,15 +923,62 @@ export function executeAITurn(state: GameState): GameState {
     for (const aiUnit of aiUnits) {
       if (!aiUnit.position) continue;
 
-      const target = getBestAIWeaponTarget(aiUnit, playerUnits);
+      const target = getBestAIWeaponTarget(aiUnit, playerUnits, newState.hexGrid);
       if (!target) continue;
 
       newState = selectUnit(newState, aiUnit);
       newState = selectTarget(newState, target);
+      // AI may consider torso-twisting to better face the target
+      newState = aiConsiderTorsoTwist(newState, aiUnit, target);
       newState = fireBestAIWeapons(newState, aiUnit, target);
       addLogEntry(newState, `${aiUnit.name} engages ${target.name}`, 'system');
     }
   }
+
+  return newState;
+}
+
+export function toggleAMSActive(state: GameState, unitId: string): GameState {
+  const newState: GameState = { ...state };
+  const unit = newState.units.find(u => u.id === unitId);
+  if (!unit || !unit.hasAMS || !unit.alive || unit.shutdown) return state;
+
+  unit.amsActive = !unit.amsActive;
+  addLogEntry(newState, `${unit.name} ${unit.amsActive ? 'activates' : 'deactivates'} AMS.`, 'system');
+  return newState;
+}
+
+// Perform a torso twist action for a unit (steps = positive clockwise steps, negative counter-clockwise)
+export function performTorsoTwist(state: GameState, unitId: string, steps: number): GameState {
+  const newState: GameState = { ...state };
+  const unit = newState.units.find(u => u.id === unitId);
+  if (!unit) return state;
+  if (!unit.alive || unit.shutdown) return state;
+
+  const maxTwists = unit.maxTorsoTwists ?? 1;
+  const usedTwists = unit.torsoTwistsThisTurn ?? 0;
+  const remainingTwists = Math.max(0, maxTwists - usedTwists);
+  const requested = Math.abs(Math.floor(steps));
+  if (requested <= 0 || remainingTwists <= 0) {
+    addLogEntry(newState, `${unit.name} cannot torso-twist (no twists remaining).`, 'system');
+    return newState;
+  }
+
+  const actualSteps = Math.min(requested, remainingTwists);
+  const dir = steps < 0 ? -1 : 1;
+  const applied = dir * actualSteps;
+
+  // Require at least 1 MP to perform the twist
+  if (unit.currentMP <= 0) {
+    addLogEntry(newState, `${unit.name} lacks movement points to torso-twist.`, 'system');
+    return newState;
+  }
+
+  unit.torsoFacing = ((typeof unit.torsoFacing === 'number' ? unit.torsoFacing : unit.facing) + applied + 6) % 6;
+  unit.torsoTwistsThisTurn = (unit.torsoTwistsThisTurn ?? 0) + actualSteps;
+  unit.currentMP = Math.max(0, unit.currentMP - 1);
+
+  addLogEntry(newState, `${unit.name} torso-twists ${applied > 0 ? `${applied} clockwise` : `${-applied} counter-clockwise`} (now torsoFacing=${unit.torsoFacing}).`, 'movement');
 
   return newState;
 }

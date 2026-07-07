@@ -46,7 +46,6 @@ async function parseMidiFile(filepath: string): Promise<ParsedMidi> {
     // Parse header to get divisions (bytes 12-13, not 14-15!)
     if (data[0] === 0x4d && data[1] === 0x54 && data[2] === 0x68 && data[3] === 0x64) {
       divisionsPerQuarter = (data[12] << 8) | data[13];
-      console.log(`   Header: divisions=${divisionsPerQuarter}`);
     }
 
     // Parse ALL tracks
@@ -165,10 +164,7 @@ async function parseMidiFile(filepath: string): Promise<ParsedMidi> {
           }
         }
 
-        // Log track details
-        if (noteOnCount > 0 || noteOffCount > 0) {
-          console.log(`  [Track] ${noteOnCount} Note-Ons, ${noteOffCount} Note-Offs → ${trackNotesAdded} notes added (total: ${allNotes.length})`);
-        }
+        // Track parsing metrics are collected internally for playback accuracy.
 
         i = trackEnd;
 
@@ -188,13 +184,7 @@ async function parseMidiFile(filepath: string): Promise<ParsedMidi> {
     }
     totalTime = Math.max(totalTime, 0.5);
 
-    console.log(`🎵 Parsed ${filepath}: ${allNotes.length} notes`);
-    console.log(`   Divisions: ${divisionsPerQuarter}, Tempo: ${Math.round(60000000/tempo)}BPM, Duration: ${totalTime.toFixed(2)}s`);
-    if (allNotes.length > 0) {
-      const unique = new Set(allNotes.map(n => n.midi));
-      const sortedUnique = Array.from(unique).sort((a, b) => a - b);
-      console.log(`   Unique pitches (${unique.size}): ${sortedUnique.slice(0, 30).join(', ')}`);
-    }
+    // MIDI parse summary is available via the returned parsed data.
     
     return { notes: allNotes, tempo, totalTime };
   } catch (err) {
@@ -244,8 +234,6 @@ if (Tone.context.state === 'suspended') {
           synth.connect(volumeNode);
           volumeNode.toDestination();
           synthRef.current = synth;
-
-          console.log('✓ Synth initialized');
         }
       } catch (err) {
         console.error('Tone init error:', err);
@@ -269,9 +257,6 @@ if (Tone.context.state === 'suspended') {
       for (const track of TRACKS) {
         const parsed = await parseMidiFile(track.path);
         parsedMidiRef.current[track.path] = parsed;
-        if (parsed.notes.length > 0) {
-          console.log(`✓ Loaded ${track.name}: ${parsed.notes.length} notes, ${parsed.totalTime.toFixed(1)}s`);
-        }
       }
     };
     loadAll();
@@ -295,9 +280,7 @@ if (Tone.context.state === 'suspended') {
     // Schedule all notes with Tone.js
     const now = Tone.now();
     
-    // Get unique note values for logging
-    const uniqueNotes = new Set(parsed.notes.map(n => n.midi));
-    console.log(`🎼 Scheduling ${parsed.notes.length} notes (${uniqueNotes.size} unique pitches): ${Array.from(uniqueNotes).sort((a, b) => a - b).join(', ')}`);
+    // Schedule notes for playback.
     
     for (const note of parsed.notes) {
       synthRef.current.triggerAttackRelease(
@@ -309,7 +292,6 @@ if (Tone.context.state === 'suspended') {
 
     // Schedule next loop with proper spacing
     const loopDelay = Math.max((parsed.totalTime + 0.8) * 1000, 1000); // Minimum 1 second
-    console.log(`▶ Next loop in ${(loopDelay / 1000).toFixed(1)}s`);
     
     if (isPlayingRef.current && currentFilepathRef.current === filepath) {
       loopIdRef.current = window.setTimeout(() => {
@@ -321,7 +303,6 @@ if (Tone.context.state === 'suspended') {
   };
 
   const setCategory = (category: 'menu' | 'campaign' | 'battle') => {
-    console.log('Switching to category:', category);
     // Stop current playback when switching categories
     if (isPlayingRef.current) {
       stop();
@@ -344,7 +325,6 @@ if (Tone.context.state === 'suspended') {
       isPlayingRef.current = true;
       currentFilepathRef.current = track.path;
       
-      console.log('Playing:', track.name);
       setIsPlaying(true);
       schedulePlayback(track.path);
     } catch (err) {
@@ -354,8 +334,6 @@ if (Tone.context.state === 'suspended') {
   };
 
   const stop = () => {
-    console.log('Stopping audio...');
-    
     isPlayingRef.current = false;
     currentFilepathRef.current = '';
     
@@ -391,7 +369,6 @@ if (Tone.context.state === 'suspended') {
     synthRef.current = synth;
 
     setIsPlaying(false);
-    console.log('Audio stopped, synth reset');
   };
 
   const nextTrack = () => {
@@ -405,7 +382,6 @@ if (Tone.context.state === 'suspended') {
           isPlayingRef.current = true;
           const track = categoryTracksRef.current[next];
           currentFilepathRef.current = track.path;
-          console.log('Next track:', track.name);
           schedulePlayback(track.path);
         }
       }, 100);
@@ -423,7 +399,6 @@ if (Tone.context.state === 'suspended') {
           isPlayingRef.current = true;
           const track = categoryTracksRef.current[prev];
           currentFilepathRef.current = track.path;
-          console.log('Previous track:', track.name);
           schedulePlayback(track.path);
         }
       }, 100);
