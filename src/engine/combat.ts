@@ -357,7 +357,6 @@ export function resolveAttack(
     let hits = clusterHits(missileCount, clusterRoll);
 
     // AMS interception: per-missile interception rolls, consumes AMS ammo and generates heat
-    let amsIntercepted = 0;
     if (target.hasAMS && target.amsActive) {
       const rating = target.amsRating ?? 2;
       const perMissileChance = Math.min(0.9, 0.12 * rating);

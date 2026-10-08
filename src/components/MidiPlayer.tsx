@@ -11,21 +11,17 @@ interface MidiPlayerProps {
 
 export function MidiPlayer({ category = 'menu', autoPlay = true, className = '' }: MidiPlayerProps) {
   const audioManager = useAudioManager();
+  const { setCategory } = audioManager;
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    audioManager.setCategory(category);
-  }, [category]);
-
-  // Auto-play on first user interaction
-  useEffect(() => {
-    if (autoPlay && !initialized && audioManager.currentTrack) {
-      // Set a flag to auto-play on next interaction
-      setInitialized(true);
-    }
-  }, [autoPlay, initialized, audioManager.currentTrack]);
+    setCategory(category);
+  }, [category, setCategory]);
 
   const handlePlayClick = async () => {
+    if (autoPlay && !initialized) {
+      setInitialized(true);
+    }
     if (audioManager.isPlaying) {
       audioManager.stop();
     } else {

@@ -1,6 +1,6 @@
 // Campaign Management UI
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import type { MercenaryCompany, Contract, StoreWeaponOffer, StoreMechOffer } from '@/lib/campaign';
 import { CampaignManager } from '@/lib/campaign';
 import type { Unit } from '@/types/battletech';
@@ -57,6 +57,7 @@ export function CampaignScreen({ campaignManager, onStartMission, onBack }: Camp
     const currentPilotNames = new Set(company?.pilots?.map(p => p.name) || []);
     return PILOT_POOL.filter(p => !currentPilotNames.has(p.name));
   }, [company]);
+  const pilotIdRef = useRef(0);
   
   const refreshCompany = () => setCompany(campaignManager.getCompany());
 
@@ -64,7 +65,7 @@ export function CampaignScreen({ campaignManager, onStartMission, onBack }: Camp
     if (!company || company.funds < 50000) return;
     
     campaignManager.addPilot({
-      id: `pilot-${Date.now()}`,
+      id: `pilot-${pilotIdRef.current++}`,
       name: pilot.name,
       gunnery: pilot.gunnery,
       piloting: pilot.piloting,

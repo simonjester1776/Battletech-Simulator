@@ -398,7 +398,7 @@ export function pixelToHex(x: number, y: number, size: number): HexCoord {
 
 // Round fractional hex coordinates to nearest hex
 function hexRound(q: number, r: number): HexCoord {
-  let s = -q - r;
+  const s = -q - r;
   
   let rq = Math.round(q);
   let rr = Math.round(r);

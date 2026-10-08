@@ -327,8 +327,7 @@ export function calculatePartialCoverModifier(
 // Calculate line of sight with elevation
 export function hasLineOfSight(
   attackerPos: ElevationHex,
-  targetPos: ElevationHex,
-  _mapHexes: Map<string, ElevationHex>
+  targetPos: ElevationHex
 ): boolean {
   // Check if intervening terrain blocks LOS
   const distance = hexDistance(attackerPos, targetPos);

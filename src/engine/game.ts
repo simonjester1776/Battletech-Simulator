@@ -3,7 +3,7 @@
 import type { GameState, Unit, HexCoord, Hex, LogEntry } from '@/types/battletech';
 import { GamePhase, MovementMode } from '@/types/battletech';
 import { createHexGrid, getHex, setHex, getValidMovementHexes, moveUnit, TERRAIN_TYPES, hasLineOfSight } from './hexgrid';
-import { getValidTargetHexes, resolveAttack, resolveHeatPhase, hexDistance, getRangeModifier, getTerrainModifier } from './combat';
+import { getValidTargetHexes, resolveAttack, resolveHeatPhase, hexDistance, getRangeModifier, getTerrainModifier, calculateToHitModifiers } from './combat';
 import { executePunch, executeKick, executeDFA } from './advanced-combat';
 import { roll2d6 } from './dice';
 import { cloneUnit } from './units';
@@ -16,6 +16,9 @@ export function initializeGame(playerUnits: Unit[], aiUnits: Unit[], objectives:
   // Clone units once and position them
   const clonedPlayerUnits = playerUnits.map(cloneUnit);
   const clonedAiUnits = aiUnits.map(cloneUnit);
+  const clonedUnitIds = new Map<string, string>();
+  playerUnits.forEach((unit, index) => clonedUnitIds.set(unit.id, clonedPlayerUnits[index].id));
+  aiUnits.forEach((unit, index) => clonedUnitIds.set(unit.id, clonedAiUnits[index].id));
   
   // Position player units on one side
   clonedPlayerUnits.forEach((unit, index) => {
@@ -58,9 +61,20 @@ export function initializeGame(playerUnits: Unit[], aiUnits: Unit[], objectives:
   });
   
   const allUnits = [...clonedPlayerUnits, ...clonedAiUnits];
+  allUnits.forEach(unit => {
+    if (!unit.alive) return;
+    unit.movementMode = unit.immobile ? MovementMode.IMMOBILE : MovementMode.WALKING;
+    unit.currentMP = unit.immobile ? 0 : unit.walkingMP;
+  });
   
   const initializedObjectives = objectives.map((objective) => {
     const clonedObjective = { ...objective };
+    if (clonedObjective.targetUnitId) {
+      clonedObjective.targetUnitId = clonedUnitIds.get(clonedObjective.targetUnitId) ?? clonedObjective.targetUnitId;
+    }
+    if (clonedObjective.escortUnitId) {
+      clonedObjective.escortUnitId = clonedUnitIds.get(clonedObjective.escortUnitId) ?? clonedObjective.escortUnitId;
+    }
     if (clonedObjective.type === ObjectiveType.ELIMINATE_ALL) {
       clonedObjective.progressMax = clonedObjective.progressMax > 0 ? clonedObjective.progressMax : clonedAiUnits.length;
     }
@@ -105,6 +119,11 @@ export function rollInitiative(state: GameState): { state: GameState; winner: 'p
   const newState = { ...state };
   newState.initiativeWinner = winner;
   newState.phase = GamePhase.MOVEMENT;
+  newState.units.forEach(unit => {
+    if (!unit.alive) return;
+    unit.movementMode = unit.immobile ? MovementMode.IMMOBILE : MovementMode.WALKING;
+    unit.currentMP = unit.immobile ? 0 : unit.walkingMP;
+  });
   
   addLogEntry(newState, `Initiative: Player rolled ${playerRoll}, AI rolled ${aiRoll}. ${winner === 'player' ? 'Player' : 'AI'} wins!`, 'system');
   
@@ -114,6 +133,15 @@ export function rollInitiative(state: GameState): { state: GameState; winner: 'p
 // Select a unit
 export function selectUnit(state: GameState, unit: Unit | null): GameState {
   const newState = { ...state };
+
+  if (state.phase === GamePhase.INITIATIVE) {
+    newState.selectedUnit = null;
+    newState.targetUnit = null;
+    newState.validMoveHexes = [];
+    newState.validTargetHexes = [];
+    return newState;
+  }
+
   newState.selectedUnit = unit;
   
   if (unit && unit.alive && !unit.shutdown) {
@@ -177,8 +205,30 @@ export function moveSelectedUnit(
 
 // Select target for attack
 export function selectTarget(state: GameState, targetUnit: Unit): GameState {
+  if (state.phase !== GamePhase.COMBAT) return state;
+
+  const attacker = state.selectedUnit
+    ? state.units.find(u => u.id === state.selectedUnit!.id)
+    : null;
+
+  if (!attacker || !attacker.alive || attacker.shutdown) return state;
+  if (!targetUnit || !targetUnit.alive) return state;
+
+  const attackerIndex = state.units.findIndex(u => u.id === attacker.id);
+  const targetIndex = state.units.findIndex(u => u.id === targetUnit.id);
+
+  if (targetIndex === -1 || attackerIndex === targetIndex) return state;
+
+  const attackerSide = attackerIndex < state.units.length / 2;
+  const targetSide = targetIndex < state.units.length / 2;
+
+  if (attackerSide === targetSide) {
+    return state;
+  }
+
   const newState = { ...state };
   newState.targetUnit = targetUnit;
+  newState.validTargetHexes = [];
   return newState;
 }
 
@@ -195,6 +245,16 @@ export function fireWeapon(
   const target = newState.units.find(u => u.id === state.targetUnit!.id);
   
   if (!attacker || !target || !attacker.position || !target.position) return state;
+
+  const attackerIndex = newState.units.findIndex(u => u.id === attacker.id);
+  const targetIndex = newState.units.findIndex(u => u.id === target.id);
+  if (attackerIndex === -1 || targetIndex === -1) return state;
+
+  const sameSide = (attackerIndex < newState.units.length / 2) === (targetIndex < newState.units.length / 2);
+  if (sameSide) {
+    addLogEntry(newState, `${attacker.name} cannot fire at a friendly target. Choose an enemy unit before attacking.`, 'info');
+    return newState;
+  }
   
   if (attacker.shutdown || attacker.heat >= 30) {
     addLogEntry(newState, `${attacker.name} is overheated/shutdown and cannot fire.`, 'info');
@@ -631,20 +691,25 @@ export function evaluateMissionObjective(
 
 // End heat phase and start new turn
 export function endHeatPhase(state: GameState): GameState {
-  let newState = resolveHeatPhaseForAll(state);
+  const newState = resolveHeatPhaseForAll(state);
   newState.turn++;
   newState.phase = GamePhase.INITIATIVE;
+  newState.selectedUnit = null;
+  newState.targetUnit = null;
+  newState.validMoveHexes = [];
+  newState.validTargetHexes = [];
+  newState.initiativeWinner = null;
   
   newState.units.forEach(unit => {
     if (unit.alive) {
-      unit.movementMode = MovementMode.STANDING;
-      unit.currentMP = unit.walkingMP;
+      unit.movementMode = unit.immobile ? MovementMode.IMMOBILE : MovementMode.WALKING;
+      unit.currentMP = unit.immobile ? 0 : unit.walkingMP;
       // reset torso twist usage each turn
       unit.torsoTwistsThisTurn = 0;
     }
   });
 
-  addLogEntry(newState, `Turn ${newState.turn} begins.`, 'system');
+  addLogEntry(newState, `Turn ${newState.turn} begins. Roll initiative to determine who acts first in the Mercenaries battle sequence: Initiative → Movement → Combat → Heat.`, 'system');
   
   const objectiveResult = evaluateMissionObjective(newState);
   if (objectiveResult.gameOver) {
@@ -695,6 +760,52 @@ export function checkGameOver(state: GameState): { gameOver: boolean; winner: 'p
 }
 
 // AI Turn - Movement and combat AI
+export function getAIHitProbability(targetNumber: number): number {
+  const successfulRollsByTarget: Record<number, number> = {
+    2: 36,
+    3: 35,
+    4: 33,
+    5: 30,
+    6: 26,
+    7: 21,
+    8: 15,
+    9: 10,
+    10: 6,
+    11: 3,
+    12: 1,
+  };
+
+  if (targetNumber <= 2) return 1;
+  return (successfulRollsByTarget[targetNumber] ?? 0) / 36;
+}
+
+function hasUnitMoved(unit: Unit): boolean {
+  const movementAllowance = unit.movementMode === MovementMode.RUNNING
+    ? unit.runningMP
+    : unit.movementMode === MovementMode.JUMPING
+      ? unit.jumpingMP
+      : unit.walkingMP;
+  return unit.currentMP < movementAllowance;
+}
+
+function getAIExpectedWeaponDamage(attacker: Unit, target: Unit, weapon: Unit['weapons'][number], distance: number, grid: Map<string, Hex>): number {
+  if (!attacker.position || !target.position) return 0;
+
+  const { targetNumber, canFire } = calculateToHitModifiers(
+    attacker,
+    target,
+    weapon,
+    distance,
+    hasUnitMoved(attacker),
+    hasUnitMoved(target),
+    getTerrainModifier(getHex(grid, target.position)),
+    getHex(grid, attacker.position),
+    getHex(grid, target.position)
+  );
+
+  return canFire ? weapon.damage * getAIHitProbability(targetNumber) : 0;
+}
+
 function getBestAIWeaponTarget(aiUnit: Unit, enemies: Unit[], grid: Map<string, Hex>): Unit | null {
   if (!aiUnit.position) return null;
 
@@ -717,25 +828,37 @@ function getBestAIWeaponTarget(aiUnit: Unit, enemies: Unit[], grid: Map<string, 
     const totalArmor = Array.from(enemy.locations.values()).reduce((sum, loc) => sum + loc.armor, 0);
     const totalStructure = Array.from(enemy.locations.values()).reduce((sum, loc) => sum + loc.structure, 0);
     const totalHealth = totalArmor + totalStructure;
-    const potentialDamage = weaponsInRange.reduce((sum, weapon) => sum + weapon.damage, 0);
-    const hitEfficiency = weaponsInRange.reduce((sum, weapon) => sum + weapon.damage / Math.max(1, weapon.heat), 0);
-    const amsPenalty = enemy.hasAMS ?  -Math.max(12, Math.floor(potentialDamage * 0.6)) : 0;
+    const expectedDamage = weaponsInRange.reduce(
+      (sum, weapon) => sum + getAIExpectedWeaponDamage(aiUnit, enemy, weapon, distance, grid),
+      0
+    );
+    if (expectedDamage <= 0) continue;
+
+    const hitEfficiency = weaponsInRange.reduce((sum, weapon) =>
+      sum + getAIExpectedWeaponDamage(aiUnit, enemy, weapon, distance, grid) / Math.max(1, weapon.heat), 0);
+    const amsPenalty = enemy.hasAMS ? -Math.max(12, Math.floor(expectedDamage * 0.6)) : 0;
     const pilotPenalty = enemy.pilot.hits * 6;
     const distancePenalty = Math.abs(distance - 3) * 8;
     const overheatBonus = enemy.heat >= 18 ? 12 : 0;
     const valueBonus = enemy.bv2 * 0.04;
     const structureThreat = enemy.pilot.hits > 0 ? 10 : 0;
+    const remainingHealth = Array.from(enemy.locations.values()).reduce((sum, loc) => sum + loc.armor + loc.structure, 0);
+    const maximumHealth = Array.from(enemy.locations.values()).reduce((sum, loc) => sum + loc.maxArmor + loc.maxStructure, 0);
+    const focusBonus = maximumHealth > 0 ? (1 - remainingHealth / maximumHealth) * 30 : 0;
+    const killBonus = expectedDamage >= remainingHealth ? 35 : 0;
 
     const score =
       hitEfficiency * 2.2 +
-      potentialDamage * 0.7 +
+      expectedDamage * 0.7 +
       valueBonus -
       totalHealth * 0.22 -
       coverPenalty -
       pilotPenalty -
       distancePenalty +
       overheatBonus +
-      structureThreat;
+      structureThreat +
+      focusBonus +
+      killBonus;
 
     // Apply AMS penalty (deprioritize missile-heavy targets)
     const finalScore = score + amsPenalty;
@@ -854,8 +977,10 @@ function fireBestAIWeapons(state: GameState, attacker: Unit, target: Unit): Game
     .sort((a, b) => {
       const missilePenaltyA = (a.type === 'missile' && target.hasAMS) ? ((target.amsRating ?? 2) * 1.5) : 0;
       const missilePenaltyB = (b.type === 'missile' && target.hasAMS) ? ((target.amsRating ?? 2) * 1.5) : 0;
-      const aValue = a.damage / Math.max(1, a.heat) + (a.heat <= 3 ? 2 : 0) + (a.type === 'missile' ? 1.5 : 0) - missilePenaltyA;
-      const bValue = b.damage / Math.max(1, b.heat) + (b.heat <= 3 ? 2 : 0) + (b.type === 'missile' ? 1.5 : 0) - missilePenaltyB;
+      const aExpectedDamage = getAIExpectedWeaponDamage(attacker, target, a, distance, state.hexGrid);
+      const bExpectedDamage = getAIExpectedWeaponDamage(attacker, target, b, distance, state.hexGrid);
+      const aValue = aExpectedDamage / Math.max(1, a.heat) + (a.heat <= 3 ? 2 : 0) + (a.type === 'missile' ? 1.5 : 0) - missilePenaltyA;
+      const bValue = bExpectedDamage / Math.max(1, b.heat) + (b.heat <= 3 ? 2 : 0) + (b.type === 'missile' ? 1.5 : 0) - missilePenaltyB;
       return bValue - aValue || b.damage - a.damage;
     });
 

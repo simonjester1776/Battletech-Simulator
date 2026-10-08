@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { GameState, Hex } from '@/types/battletech';
 import { MovementMode } from '@/types/battletech';
 import type { Contract } from '@/lib/campaign';
@@ -33,7 +33,6 @@ interface BattleScreenProps {
   onDFAAttack: () => void;
   onTorsoTwist: (direction: 'left' | 'right') => void;
   onRestart: () => void;
-  onAIturn: () => void;
   onToggleAMS: () => void;
   onBack: () => void;
   gameOver: { gameOver: boolean; winner: 'player' | 'ai' | 'draw' | null } | null;
@@ -58,7 +57,6 @@ export function BattleScreen({
   onTorsoTwist,
   onToggleAMS,
   onRestart,
-  onAIturn,
   onBack,
   gameOver,
   objectives,
@@ -68,6 +66,7 @@ export function BattleScreen({
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showWipeConfirm, setShowWipeConfirm] = useState(false);
+  const [missionBriefingVisible, setMissionBriefingVisible] = useState(true);
   const [saveName, setSaveName] = useState('');
   const [savedGames, setSavedGames] = useState<Array<{ id: string; name: string; timestamp: number }>>([]);
   const [saveStats, setSaveStats] = useState({ totalSaves: 0, totalSize: 0 });
@@ -94,7 +93,7 @@ export function BattleScreen({
   };
 
   const handleLoadGame = (saveId: string) => {
-    const loaded = loadGame(saveId);
+    const loaded = loadGame(saveId) as GameState | null;
     if (loaded) {
       onGameStateChange(loaded);
       setShowLoadDialog(false);
@@ -136,11 +135,7 @@ export function BattleScreen({
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
-  const [showMissionBriefing, setShowMissionBriefing] = useState<boolean>(!!contract && !!objectives && objectives.length > 0);
-
-  useEffect(() => {
-    setShowMissionBriefing(!!contract && !!objectives && objectives.length > 0);
-  }, [contract, objectives]);
+  const showMissionBriefing = !!contract && !!objectives && objectives.length > 0 && missionBriefingVisible;
 
   const playerUnits = gameState.units.filter((_, i) => i < gameState.units.length / 2);
   const aiUnits = gameState.units.filter((_, i) => i >= gameState.units.length / 2);
@@ -274,7 +269,7 @@ export function BattleScreen({
               </div>
             )}
             {showMissionBriefing && contract && objectives && (
-              <Dialog open={showMissionBriefing} onOpenChange={(open) => setShowMissionBriefing(open)}>
+              <Dialog key={contract.id} open={showMissionBriefing} onOpenChange={(open) => setMissionBriefingVisible(open)}>
                 <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-2xl">
                   <DialogHeader>
                     <DialogTitle className="text-2xl">Mission Briefing</DialogTitle>
@@ -320,7 +315,7 @@ export function BattleScreen({
                   </div>
                   <DialogFooter>
                     <Button
-                      onClick={() => setShowMissionBriefing(false)}
+                      onClick={() => setMissionBriefingVisible(false)}
                       className="bg-blue-600 hover:bg-blue-700"
                     >
                       Begin Mission
@@ -369,7 +364,6 @@ export function BattleScreen({
             onTorsoTwist={onTorsoTwist}
             onToggleAMS={onToggleAMS}
             onRestart={onRestart}
-            onAIturn={onAIturn}
           />
         </div>
       </div>

@@ -33,7 +33,6 @@ interface ControlPanelProps {
   onDFAAttack: () => void;
   onTorsoTwist: (direction: 'left' | 'right') => void;
   onRestart: () => void;
-  onAIturn: () => void;
   onToggleAMS: () => void;
 }
 
@@ -51,8 +50,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onDFAAttack,
   onTorsoTwist,
   onToggleAMS,
-  onRestart,
-  onAIturn
+  onRestart
 }) => {
   const { phase, turn, initiativeWinner, selectedUnit, targetUnit } = gameState;
   
@@ -223,13 +221,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               <SkipForward className="w-4 h-4 mr-2" />
               End Movement
             </Button>
-            <Button 
-              variant="outline"
-              onClick={onAIturn}
-            >
-              <Play className="w-4 h-4 mr-2" />
-              AI Turn
-            </Button>
           </>
         )}
         
@@ -374,12 +365,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
       )}
       
       <div className="text-xs text-gray-500 bg-gray-800/50 rounded p-2">
-        <p className="font-semibold text-gray-400 mb-1">How to Play:</p>
+        <p className="font-semibold text-gray-400 mb-1">Mercenaries Turn Flow:</p>
         <ul className="space-y-0.5">
-          <li>1. Roll for initiative</li>
-          <li>2. Select a unit and click a green hex to move</li>
-          <li>3. Select target unit and fire weapons</li>
-          <li>4. End phases to proceed</li>
+          <li>1. Roll initiative</li>
+          <li>2. Movement phase: select a unit and click a green hex to move</li>
+          <li>3. Combat phase: select a friendly mech, then an enemy target, then fire</li>
+          <li>4. Heat phase: resolve shutdown and heat, then begin the next turn</li>
         </ul>
       </div>
     </div>

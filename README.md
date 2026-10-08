@@ -38,7 +38,7 @@ A comprehensive, full-stack BattleTech tactical combat simulator with real-time 
   - Chassis selector in Mech Lab
 - **Combat Vehicles** - 5 armored combat vehicles
 - **Battle Armor** - 6 infantry suits with powered armor
-- **Aerospace Fighters (Coming Soon)** - Air combat mechanics implemented, UI integration pending
+- **Aerospace Fighters** - Air combat units are now included in the offline roster and campaign selection flow
 
 ---
 
@@ -66,28 +66,31 @@ A comprehensive, full-stack BattleTech tactical combat simulator with real-time 
 ## 📦 Installation
 
 ### Prerequisites
-- Node.js 18+ and Yarn
-- Python 3.11+
+- Node.js 18+
+- npm 9+
+- Python 3.11+ (only needed for the optional FastAPI backend)
 - Git
 
 ### Clone Repository
 ```bash
 git clone <repository-url>
-cd battletech-simulator
+cd "Battletech Simulator"
 ```
 
 ### Install Dependencies
 
 **Frontend:**
 ```bash
-yarn install
+npm install
 ```
 
-**Backend:**
+**Backend (optional for multiplayer / backend APIs):**
 ```bash
 cd backend
 pip install -r requirements.txt
 ```
+
+> This repo is a Vite + React app. The current frontend tooling uses npm scripts in `package.json` rather than Yarn.
 
 ---
 
@@ -95,22 +98,13 @@ pip install -r requirements.txt
 
 ### Development Mode
 
-**Option 1: Using Supervisor (Recommended)**
-```bash
-sudo supervisorctl start frontend
-sudo supervisorctl start backend
-sudo supervisorctl status
-```
-
-**Option 2: Manual Start**
-
 Terminal 1 (Frontend):
 ```bash
-yarn start
+npm run dev
 # Runs on http://localhost:3000
 ```
 
-Terminal 2 (Backend):
+Terminal 2 (Backend, optional):
 ```bash
 cd backend
 uvicorn server:app --host 0.0.0.0 --port 8001 --reload
@@ -119,8 +113,13 @@ uvicorn server:app --host 0.0.0.0 --port 8001 --reload
 
 ### Production Build
 ```bash
-yarn build
+npm run build
 # Output in /dist directory
+```
+
+### Local Preview
+```bash
+npm run preview -- --host 0.0.0.0 --port 4173
 ```
 
 ---
@@ -130,9 +129,10 @@ yarn build
 ### Single Player
 1. Open http://localhost:3000
 2. Click **"Single Player"**
-3. Select your units and enemy units
+3. Select units and enemy units as needed
 4. Click **"Start Battle"**
-5. Play through Movement → Combat → Heat phases
+5. Play through the actual turn flow: **Initiative → Movement → Combat → Heat/End Turn**
+6. Use the turn controls to **Roll Initiative**, move units on green hexes, target enemies, and fire weapons
 
 ### Online Multiplayer
 1. **Host Game:**
@@ -176,10 +176,13 @@ yarn build
 - **Click weapon** - Fire individual weapon
 
 ### Combat Flow
-1. **Initiative Phase** - Roll for turn order
+The BattleTech: Mercenaries rulebook sequence is:
+1. **Initiative Phase** - Roll for turn order and determine who acts first
 2. **Movement Phase** - Move your units (walking/running/jumping)
-3. **Combat Phase** - Declare targets and fire weapons
-4. **Heat Phase** - Manage heat buildup and shutdowns
+3. **Combat Phase** - Select a friendly unit, then an enemy target, then fire weapons
+4. **Heat Phase** - Manage heat buildup, shutdowns, and prepare the next turn
+
+This matches the application’s turn flow and prevents firing before initiative and movement have been completed.
 
 ---
 
@@ -319,10 +322,10 @@ bash -c '
 ### Build & Deploy
 ```bash
 # Build frontend
-yarn build
+npm run build
 
-# Start production
-yarn start
+# Start production preview
+npm run preview -- --host 0.0.0.0 --port 4173
 
 # Backend (production)
 uvicorn server:app --host 0.0.0.0 --port 8001 --workers 4
@@ -395,9 +398,9 @@ uvicorn server:app --host 0.0.0.0 --port 8001 --workers 4
 ### Frontend won't start
 ```bash
 # Clear cache and reinstall
-rm -rf node_modules yarn.lock
-yarn install
-yarn start
+rm -rf node_modules package-lock.json
+npm install
+npm run dev
 ```
 
 ### Backend won't start
@@ -447,8 +450,8 @@ lsof -i :8001
 git checkout -b feature/new-unit
 
 # Make changes and test
-yarn build
-yarn start
+npm run build
+npm run dev
 
 # Commit with descriptive message
 git commit -m "Add new aerospace fighter variant"

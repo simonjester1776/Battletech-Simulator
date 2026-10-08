@@ -2,6 +2,7 @@
 
 import type { Unit, Weapon, Location } from '@/types/battletech';
 import { UnitType, Config, WeaponType, MovementMode } from '@/types/battletech';
+import { hasMechImages } from '@/lib/mech-images';
 
 // Helper to create locations for a biped mech
 function createBipedLocations(
@@ -1092,8 +1093,8 @@ export function createUller(): Unit {
 }
 
 // Import additional mechs
-import { 
-  createCommando, 
+import {
+  createCommando,
   createCenturion,
   createAwesome
 } from './additional-units';
@@ -1104,9 +1105,11 @@ import {
   createWarhawk
 } from './mechs-heavy-clan';
 
-// Get all available Mechs
+// Get all supported mech units for gameplay.
+// Battle armor, vehicles, and aerospace fighters are intentionally excluded because
+// the battle flow, UI, and image set are built around mech combat only.
 export function getAllUnits(): Unit[] {
-  return [
+  const roster = [
     // Light Mechs (20-35 tons)
     createCommando(),
     createCougar(),
@@ -1115,30 +1118,37 @@ export function getAllUnits(): Unit[] {
     createJenner(),
     createRaven(),
     createUller(),
-    
+
     // Medium Mechs (40-55 tons)
     createHunchback(),
     createHunchback2C(),
     createCenturion(),
     createHollander(),
-    
+
     // Heavy Mechs (60-75 tons)
     createWarhammer(),
     createLoki(),
     createThor(),
-    
+
     // Clan Mechs & Heavy Assault
     createTimberWolf(),
     createMadDog(),
     createWarhawk(),
-    
+
     // Assault Mechs (80-100 tons)
     createAwesome(),
     createAtlasD()
   ];
+
+  return roster.filter(
+    (unit): unit is Unit =>
+      !!unit.name &&
+      unit.unitType === UnitType.MECH &&
+      hasMechImages(unit.name)
+  );
 }
 
-// Get all units (Mechs only)
+// Backwards-compatible alias to the supported mech-only roster.
 export function getAllUnitsAndVehicles(): Unit[] {
   return getAllUnits();
 }

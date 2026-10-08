@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Tone from 'tone';
 
 export interface Track {
@@ -61,9 +61,6 @@ async function parseMidiFile(filepath: string): Promise<ParsedMidi> {
         let runningStatus = 0;
         // Use array to track multiple instances of same note
         const noteStack: Record<number, number[]> = {};
-        let noteOnCount = 0;
-        let noteOffCount = 0;
-        let trackNotesAdded = 0;
 
         while (i < trackEnd) {
           // Parse variable-length delta time
@@ -113,7 +110,6 @@ async function parseMidiFile(filepath: string): Promise<ParsedMidi> {
               // Push to array to handle multiple instances of same note
               if (!noteStack[note]) noteStack[note] = [];
               noteStack[note].push(currentTime);
-              noteOnCount++;
             }
           } else if ((eventByte & 0xf0) === 0x80) {
             // Note Off
@@ -132,8 +128,6 @@ async function parseMidiFile(filepath: string): Promise<ParsedMidi> {
                   time: Math.max(timeInSeconds, 0),
                   duration: Math.max(durationInSeconds, 0.05),
                 });
-                trackNotesAdded++;
-                noteOffCount++;
               }
             }
           } else if ((eventByte & 0xf0) === 0xc0) {
@@ -206,7 +200,7 @@ export function useAudioManager() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.3);
   const [isMuted, setIsMuted] = useState(false);
-  const categoryTracksRef = useRef<Track[]>([]);
+  const [categoryTracks, setCategoryTracks] = useState<Track[]>([]);
 
   // Initialize Tone.js
   useEffect(() => {
@@ -262,7 +256,7 @@ if (Tone.context.state === 'suspended') {
     loadAll();
   }, []);
 
-  const schedulePlayback = (filepath: string) => {
+  const schedulePlayback = useCallback(function schedulePlayback(filepath: string) {
     const parsed = parsedMidiRef.current[filepath];
     if (!parsed || !parsed.notes.length) {
       console.warn('No parsed MIDI data for', filepath);
@@ -274,14 +268,10 @@ if (Tone.context.state === 'suspended') {
       return;
     }
 
-    // Clear any existing notes
     synthRef.current.triggerRelease([]);
 
-    // Schedule all notes with Tone.js
     const now = Tone.now();
-    
-    // Schedule notes for playback.
-    
+
     for (const note of parsed.notes) {
       synthRef.current.triggerAttackRelease(
         Tone.Midi(note.midi).toFrequency(),
@@ -290,9 +280,8 @@ if (Tone.context.state === 'suspended') {
       );
     }
 
-    // Schedule next loop with proper spacing
-    const loopDelay = Math.max((parsed.totalTime + 0.8) * 1000, 1000); // Minimum 1 second
-    
+    const loopDelay = Math.max((parsed.totalTime + 0.8) * 1000, 1000);
+
     if (isPlayingRef.current && currentFilepathRef.current === filepath) {
       loopIdRef.current = window.setTimeout(() => {
         if (isPlayingRef.current && currentFilepathRef.current === filepath) {
@@ -300,63 +289,28 @@ if (Tone.context.state === 'suspended') {
         }
       }, loopDelay);
     }
-  };
+  }, []);
 
-  const setCategory = (category: 'menu' | 'campaign' | 'battle') => {
-    // Stop current playback when switching categories
-    if (isPlayingRef.current) {
-      stop();
-    }
-    const tracks = TRACKS.filter(t => t.category === category);
-    categoryTracksRef.current = tracks;
-    setCurrentTrackIndex(0);
-  };
-
-  const play = async () => {
-    try {
-      if (!categoryTracksRef.current.length) return;
-
-      // Stop any currently playing track first
-      stop();
-      
-      await Tone.start();
-
-      const track = categoryTracksRef.current[currentTrackIndex];
-      isPlayingRef.current = true;
-      currentFilepathRef.current = track.path;
-      
-      setIsPlaying(true);
-      schedulePlayback(track.path);
-    } catch (err) {
-      console.error('Play error:', err);
-      isPlayingRef.current = false;
-    }
-  };
-
-  const stop = () => {
+  const stop = useCallback(() => {
     isPlayingRef.current = false;
     currentFilepathRef.current = '';
-    
-    // Clear any pending loop timeout
+
     if (loopIdRef.current) {
       window.clearTimeout(loopIdRef.current);
       loopIdRef.current = null;
     }
 
-    // Immediately release all notes
     if (synthRef.current) {
       synthRef.current.triggerRelease([]);
-      // Dispose and recreate synth to fully clear state
       synthRef.current.dispose();
     }
-    
-    // Recreate synth
+
     const volumeNode = new Tone.Volume(Tone.gainToDb(0.3));
     volumeNodeRef.current = volumeNode;
 
     const synth = new Tone.PolySynth(Tone.Synth, {
       oscillator: { type: 'triangle' },
-      envelope: { 
+      envelope: {
         attack: 0.05,
         decay: 0.2,
         sustain: 0.3,
@@ -369,47 +323,78 @@ if (Tone.context.state === 'suspended') {
     synthRef.current = synth;
 
     setIsPlaying(false);
-  };
+  }, []);
 
-  const nextTrack = () => {
-    const next = (currentTrackIndex + 1) % categoryTracksRef.current.length;
+  const setCategory = useCallback((category: 'menu' | 'campaign' | 'battle') => {
+    if (isPlayingRef.current) {
+      stop();
+    }
+    const tracks = TRACKS.filter(t => t.category === category);
+    setCategoryTracks(tracks);
+    setCurrentTrackIndex(0);
+  }, [stop]);
+
+  const play = useCallback(async () => {
+    try {
+      if (!categoryTracks.length) return;
+
+      stop();
+
+      await Tone.start();
+
+      const track = categoryTracks[currentTrackIndex];
+      if (!track) return;
+
+      isPlayingRef.current = true;
+      currentFilepathRef.current = track.path;
+
+      setIsPlaying(true);
+      schedulePlayback(track.path);
+    } catch (err) {
+      console.error('Play error:', err);
+      isPlayingRef.current = false;
+    }
+  }, [categoryTracks, currentTrackIndex, schedulePlayback, stop]);
+
+  const nextTrack = useCallback(() => {
+    const next = (currentTrackIndex + 1) % categoryTracks.length;
     setCurrentTrackIndex(next);
-    
+
     if (isPlaying) {
       stop();
       setTimeout(() => {
-        if (synthRef.current && categoryTracksRef.current[next]) {
+        if (synthRef.current && categoryTracks[next]) {
           isPlayingRef.current = true;
-          const track = categoryTracksRef.current[next];
+          const track = categoryTracks[next];
           currentFilepathRef.current = track.path;
+          setIsPlaying(true);
           schedulePlayback(track.path);
         }
       }, 100);
     }
-  };
+  }, [categoryTracks, currentTrackIndex, isPlaying, schedulePlayback, stop]);
 
-  const previousTrack = () => {
-    const prev = (currentTrackIndex - 1 + categoryTracksRef.current.length) % categoryTracksRef.current.length;
+  const previousTrack = useCallback(() => {
+    const prev = (currentTrackIndex - 1 + categoryTracks.length) % categoryTracks.length;
     setCurrentTrackIndex(prev);
-    
+
     if (isPlaying) {
       stop();
       setTimeout(() => {
-        if (synthRef.current && categoryTracksRef.current[prev]) {
+        if (synthRef.current && categoryTracks[prev]) {
           isPlayingRef.current = true;
-          const track = categoryTracksRef.current[prev];
+          const track = categoryTracks[prev];
           currentFilepathRef.current = track.path;
+          setIsPlaying(true);
           schedulePlayback(track.path);
         }
       }, 100);
     }
-  };
+  }, [categoryTracks, currentTrackIndex, isPlaying, schedulePlayback, stop]);
 
-  const getCurrentTrack = () => {
-    return categoryTracksRef.current[currentTrackIndex];
-  };
+  const currentTrack = categoryTracks[currentTrackIndex] ?? null;
 
-  return {
+  return useMemo(() => ({
     play,
     stop,
     nextTrack,
@@ -420,7 +405,7 @@ if (Tone.context.state === 'suspended') {
     isPlaying,
     volume,
     isMuted,
-    currentTrack: getCurrentTrack(),
-    allTracks: categoryTracksRef.current,
-  };
+    currentTrack,
+    allTracks: categoryTracks,
+  }), [categoryTracks, currentTrack, isMuted, isPlaying, nextTrack, play, previousTrack, setCategory, setIsMuted, setVolume, stop, volume]);
 }

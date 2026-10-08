@@ -1,6 +1,6 @@
 ﻿// Mech Lab - Custom Mech Builder
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import type { Unit, Weapon } from '@/types/battletech';
 import { WEAPON_DATABASE } from '@/lib/weapon-database';
 import { getAllUnitsAndVehicles, cloneUnit } from '@/engine/units';
@@ -25,6 +25,7 @@ interface MechConfig {
 
 export function MechLab({ onSave, onCancel }: MechLabProps) {
   const allUnits = useMemo(() => getAllUnitsAndVehicles(), []);
+  const weaponIdRef = useRef(0);
   const [selectedUnitIndex, setSelectedUnitIndex] = useState(0);
   const [config, setConfig] = useState<MechConfig>({
     name: allUnits[0]?.name || 'Custom Mech',
@@ -60,7 +61,7 @@ export function MechLab({ onSave, onCancel }: MechLabProps) {
     if (!weaponData) return;
 
     const newWeapon: Weapon = {
-      id: `weapon-${Date.now()}-${Math.random()}`,
+      id: `weapon-${weaponIdRef.current++}`,
       name: weaponName,
       damage: weaponData.damage,
       heat: weaponData.heat,
