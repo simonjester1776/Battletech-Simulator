@@ -4,11 +4,7 @@ import type { MissionObjective } from '@/lib/mission-objectives';
 
 export const UnitType = {
   MECH: 'mech',
-  VEHICLE: 'vehicle',
-  BATTLE_ARMOR: 'battle_armor',
-  ELEMENTAL: 'elemental',
-  INFANTRY: 'infantry',
-  AEROSPACE: 'aerospace'
+  INFANTRY: 'infantry'
 } as const;
 export type UnitType = typeof UnitType[keyof typeof UnitType];
 
@@ -319,20 +315,6 @@ export const QUAD_FRONT_HIT_TABLE: { [roll: number]: string } = {
   10: 'LFL', // Left Front Leg
   11: 'LRL', // Left Rear Leg
   12: 'HD'
-};
-
-export const VEHICLE_HIT_TABLE: { [roll: number]: string } = {
-  2: 'TURRET',
-  3: 'FRONT',
-  4: 'FRONT',
-  5: 'SIDE',
-  6: 'SIDE',
-  7: 'FRONT',
-  8: 'FRONT',
-  9: 'SIDE',
-  10: 'SIDE',
-  11: 'REAR',
-  12: 'TURRET'
 };
 
 // Critical Hit Determination Table

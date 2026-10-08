@@ -1106,8 +1106,6 @@ import {
 } from './mechs-heavy-clan';
 
 // Get all supported mech units for gameplay.
-// Battle armor, vehicles, and aerospace fighters are intentionally excluded because
-// the battle flow, UI, and image set are built around mech combat only.
 export function getAllUnits(): Unit[] {
   const roster = [
     // Light Mechs (20-35 tons)
@@ -1146,11 +1144,6 @@ export function getAllUnits(): Unit[] {
       unit.unitType === UnitType.MECH &&
       hasMechImages(unit.name)
   );
-}
-
-// Backwards-compatible alias to the supported mech-only roster.
-export function getAllUnitsAndVehicles(): Unit[] {
-  return getAllUnits();
 }
 
 // Create a copy of a unit with new ID

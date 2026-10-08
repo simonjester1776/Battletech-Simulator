@@ -24,7 +24,7 @@ import {
   checkGameOver
 } from '@/engine/game';
 import { getHexKey } from '@/engine/hexgrid';
-import { getAllUnitsAndVehicles, cloneUnit } from '@/engine/units';
+import { getAllUnits, cloneUnit } from '@/engine/units';
 import { CampaignManager } from '@/lib/campaign';
 import type { Contract } from '@/lib/campaign';
 import type { GameMode } from '@/lib/multiplayer';
@@ -61,7 +61,7 @@ function App() {
   const battleResultsProcessedRef = useRef(false);
   const lastGameOverRef = useRef<{ gameOver: boolean; winner: 'player' | 'ai' | 'draw' | null } | null>(null);
   
-  const initialUnits = getAllUnitsAndVehicles();
+  const initialUnits = getAllUnits();
   const [availableUnits, setAvailableUnits] = useState<Unit[]>(initialUnits);
   const [playerSelections, setPlayerSelections] = useState<string[]>(() => [
     initialUnits.find(u => u.name.toLowerCase().includes('atlas'))?.id,

@@ -3,12 +3,10 @@ import {
   BIPED_FRONT_HIT_TABLE, 
   BIPED_REAR_HIT_TABLE, 
   QUAD_FRONT_HIT_TABLE, 
-  VEHICLE_HIT_TABLE,
   CRITICAL_HIT_TABLE, 
   RANGE_MODIFIERS,
   HEAT_SCALE_EFFECTS,
   Arc, 
-  UnitType, 
   Config,
   MovementMode,
   WeaponType
@@ -130,10 +128,6 @@ export function determineArc(attacker: Unit, target: Unit): Arc {
 
 // Get hit location based on arc and unit type
 export function getHitLocation(roll: number, unit: Unit, arc: Arc): string {
-  if (unit.unitType === UnitType.VEHICLE) {
-    return VEHICLE_HIT_TABLE[roll] || 'FRONT';
-  }
-  
   if (unit.config === Config.QUAD) {
     return QUAD_FRONT_HIT_TABLE[roll] || 'CT';
   }

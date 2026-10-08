@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { GamePhase } from '@/types/battletech';
 import { checkGameOver, getAIHitProbability, initializeGame, rollInitiative, selectUnit } from './game';
-import { getAllUnitsAndVehicles } from './units';
+import { getAllUnits } from './units';
 import { generateAssassinationMission, generateEscortMission } from '@/lib/mission-objectives';
 
 describe('battle turn flow', () => {
   it('blocks unit selection until initiative is rolled', () => {
-    const units = getAllUnitsAndVehicles();
+    const units = getAllUnits();
     const playerUnit = units[0];
     const enemyUnit = units[1];
 
@@ -17,7 +17,7 @@ describe('battle turn flow', () => {
   });
 
   it('starts movement with walking mode after initiative is rolled', () => {
-    const units = getAllUnitsAndVehicles();
+    const units = getAllUnits();
     const playerUnit = units[0];
     const enemyUnit = units[1];
 
@@ -32,7 +32,7 @@ describe('battle turn flow', () => {
   });
 
   it('remaps mission unit references when initializing cloned units', () => {
-    const units = getAllUnitsAndVehicles();
+    const units = getAllUnits();
     const playerUnit = units[0];
     const enemyUnit = units[1];
     const objectives = [

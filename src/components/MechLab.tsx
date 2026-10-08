@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef } from 'react';
 import type { Unit, Weapon } from '@/types/battletech';
 import { WEAPON_DATABASE } from '@/lib/weapon-database';
-import { getAllUnitsAndVehicles, cloneUnit } from '@/engine/units';
+import { getAllUnits, cloneUnit } from '@/engine/units';
 import { getMechSmallImage, hasMechImages } from '@/lib/mech-images';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,7 +24,7 @@ interface MechConfig {
 }
 
 export function MechLab({ onSave, onCancel }: MechLabProps) {
-  const allUnits = useMemo(() => getAllUnitsAndVehicles(), []);
+  const allUnits = useMemo(() => getAllUnits(), []);
   const weaponIdRef = useRef(0);
   const [selectedUnitIndex, setSelectedUnitIndex] = useState(0);
   const [config, setConfig] = useState<MechConfig>({

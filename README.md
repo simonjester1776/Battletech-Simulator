@@ -15,7 +15,7 @@ A comprehensive, full-stack BattleTech tactical combat simulator with real-time 
 ### Core Gameplay
 - **Hex-based Tactical Combat** - Classic BattleTech tabletop rules
 - **Turn-based Strategy** - Movement, combat, and heat management phases
-- **34 Unit Variants** - 23 Mechs, 5 Vehicles, 6 Battle Armor suits
+- **BattleMech Variants** - Inner Sphere and Clan designs for tactical play
 - **Advanced Combat** - Armor damage, heat sinks, weapon systems, physical attacks
 - **Campaign Mode** - Build your mercenary company with progression
 - **Mech Lab** - Customize and configure your units with full chassis selector
@@ -36,10 +36,6 @@ A comprehensive, full-stack BattleTech tactical combat simulator with real-time 
 - **BattleMechs** - Light, Medium, Heavy, Assault (Inner Sphere & Clan)
   - 23 fully functional variants
   - Chassis selector in Mech Lab
-- **Combat Vehicles** - 5 armored combat vehicles
-- **Battle Armor** - 6 infantry suits with powered armor
-- **Aerospace Fighters** - Air combat units are now included in the offline roster and campaign selection flow
-
 ---
 
 ## 🏗️ Architecture
@@ -259,9 +255,6 @@ PORT=8001
 │   │   ├── combat.ts          # Combat mechanics
 │   │   ├── hexgrid.ts         # Hex grid system
 │   │   ├── units.ts           # Unit definitions
-│   │   ├── vehicles.ts        # Combat vehicles
-│   │   ├── battle-armor.ts    # Battle armor
-│   │   └── aerospace.ts       # Aerospace fighters
 │   ├── lib/                   # Utilities
 │   │   ├── websocket-client.ts   # WebSocket manager
 │   │   ├── mission-objectives.ts # Mission system
@@ -351,28 +344,6 @@ uvicorn server:app --host 0.0.0.0 --port 8001 --workers 4
 **Assault (80-100 tons):**
 - Awesome AWS-8Q, Stalker STK-3F, Atlas AS7-D, King Crab KGC-000
 
-### Combat Vehicles (5 variants)
-- Scorpion Light Tank (25t)
-- Striker Light Tank (35t)
-- Vedette Medium Tank (50t)
-- Rommel Tank (65t)
-- Demolisher Heavy Tank (80t)
-
-### Battle Armor (6 variants)
-- Standard Battle Armor (IS)
-- Elemental Suit (Clan)
-- Salamander Suit
-- Longinus Suit
-- Sylph Battle Armor
-- Infiltrator Suit
-
-### Aerospace Fighters (7 variants - In Development)
-**Note:** Mechanics implemented, UI integration pending
-- **Light:** Sparrowhawk (30t), Chippewa (25t)
-- **Medium:** Shilone (50t), Lucifer (45t)
-- **Heavy:** Thunderbird (60t), Corsair (50t)
-- **Clan:** Visigoth (60t)
-
 ---
 
 ## 🎯 Mission Objectives
@@ -454,7 +425,7 @@ npm run build
 npm run dev
 
 # Commit with descriptive message
-git commit -m "Add new aerospace fighter variant"
+git commit -m "Update BattleMech roster"
 
 # Push and create PR
 git push origin feature/new-unit
@@ -502,7 +473,6 @@ MIT License - See LICENSE file for details
 - [x] Save management system
 
 ### In Progress ⏳
-- [ ] Aerospace fighter UI integration
 - [ ] Live objective tracking in battle
 - [ ] Multiplayer game state sync
 
@@ -520,7 +490,7 @@ MIT License - See LICENSE file for details
 
 ### v2.1.1 (Current)
 - 🐛 **FIXED**: MechLab chassis selector crash (`handleChassisChange is not defined`)
-- ✅ All 34 units now selectable in Mech Lab (23 Mechs, 5 Vehicles, 6 Battle Armor)
+- ✅ Supported BattleMech chassis selectable in Mech Lab
 - ✅ Chassis change properly resets weapon loadouts and stats
 - ✅ Comprehensive stability testing completed across all game modes
 
@@ -533,7 +503,6 @@ MIT License - See LICENSE file for details
 ### v2.0.0
 - ✨ Added online multiplayer with WebSocket
 - ✨ Added mission objectives system (6 types)
-- ✨ Added 7 aerospace fighter variants (mechanics ready, UI pending)
 - 🔨 Refactored App.tsx (816 → 280 lines)
 - 🎨 Created modular screen components
 - 🛡️ Added production error boundaries
