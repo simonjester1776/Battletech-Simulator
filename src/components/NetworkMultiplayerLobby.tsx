@@ -131,14 +131,16 @@ export function NetworkMultiplayerLobby({ onStartGame, onBack }: NetworkMultipla
       return;
     }
 
+    const normalizedRoomCode = roomCode.trim().toLowerCase();
+
     try {
       setError(null);
       
       // Connect to WebSocket
-      const { playerId: pid, isHost: host } = await multiplayerClient.connect(roomCode);
+      const { playerId: pid, isHost: host } = await multiplayerClient.connect(normalizedRoomCode);
       
       // Fetch room details
-      const room = await getRoom(roomCode);
+      const room = await getRoom(normalizedRoomCode);
       
       setCurrentRoom(room);
       setPlayerId(pid);

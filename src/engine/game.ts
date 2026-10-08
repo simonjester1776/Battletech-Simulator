@@ -3,8 +3,8 @@
 import type { GameState, Unit, HexCoord, Hex, LogEntry } from '@/types/battletech';
 import { GamePhase, MovementMode } from '@/types/battletech';
 import { createHexGrid, getHex, setHex, getValidMovementHexes, moveUnit, TERRAIN_TYPES, hasLineOfSight } from './hexgrid';
-import { getValidTargetHexes, resolveAttack, resolveHeatPhase, hexDistance, getRangeModifier, getTerrainModifier, calculateToHitModifiers } from './combat';
-import { executePunch, executeKick, executeDFA } from './advanced-combat';
+import { getValidTargetHexes, resolveAttack, resolveHeatPhase, hexDistance, getRangeModifier, getTerrainModifier, calculateToHitModifiers, applyDamage, determineArc, getHitLocation } from './combat';
+import { executePunch, executeKick, executeDFA, executeCharge, type PhysicalAttackResult } from './advanced-combat';
 import { roll2d6 } from './dice';
 import { cloneUnit } from './units';
 import { ObjectiveType, ObjectiveStatus, type MissionObjective } from '@/lib/mission-objectives';
@@ -175,7 +175,7 @@ export function moveSelectedUnit(
   if (!unit) return state;
   
   const oldHex = getHex(newState.hexGrid, unit.position!);
-  const result = moveUnit(unit, toCoord, newState.hexGrid, movementMode);
+  const result = moveUnit(unit, toCoord, newState.hexGrid, movementMode, newState.units);
   
   if (result.success) {
     if (oldHex) {
@@ -353,45 +353,23 @@ export function fireAllWeapons(state: GameState): GameState {
   return newState;
 }
 
-// Execute punch attack
-export function executePunchAttack(state: GameState): GameState {
-  if (state.phase !== GamePhase.COMBAT) return state;
-  if (!state.selectedUnit || !state.targetUnit) return state;
-  
-  const newState = { ...state };
-  const attacker = newState.units.find(u => u.id === state.selectedUnit!.id);
-  const target = newState.units.find(u => u.id === state.targetUnit!.id);
-  
-  if (!attacker || !target || !attacker.position || !target.position) return state;
-  
-  const result = executePunch(attacker, target);
-  
-  addLogEntry(newState, result.log, result.success ? 'combat' : 'info');
-  
-  if (!target.alive) {
-    addLogEntry(newState, `${target.name} DESTROYED!`, 'critical');
-    
-    const targetIndex = newState.units.indexOf(target);
-    const isPlayerUnit = targetIndex < newState.units.length / 2;
-    
-    if (isPlayerUnit) {
-      newState.aiScore += target.bv2;
-    } else {
-      newState.playerScore += target.bv2;
-    }
-    
-    const targetHex = getHex(newState.hexGrid, target.position);
-    if (targetHex) {
-      targetHex.unit = null;
-      setHex(newState.hexGrid, targetHex);
-    }
+function recordDestroyedUnit(state: GameState, unit: Unit): void {
+  const unitIndex = state.units.findIndex(candidate => candidate.id === unit.id);
+  if (unitIndex < 0) return;
+  if (unitIndex < state.units.length / 2) state.aiScore += unit.bv2;
+  else state.playerScore += unit.bv2;
+  const unitHex = unit.position ? getHex(state.hexGrid, unit.position) : undefined;
+  if (unitHex?.unit?.id === unit.id) {
+    unitHex.unit = null;
+    setHex(state.hexGrid, unitHex);
   }
-  
-  return newState;
+  addLogEntry(state, `${unit.name} DESTROYED!`, 'critical');
 }
 
-// Execute kick attack
-export function executeKickAttack(state: GameState): GameState {
+function resolvePhysicalAttack(
+  state: GameState,
+  attackType: 'punch' | 'kick' | 'dfa' | 'charge'
+): GameState {
   if (state.phase !== GamePhase.COMBAT) return state;
   if (!state.selectedUnit || !state.targetUnit) return state;
   
@@ -400,92 +378,75 @@ export function executeKickAttack(state: GameState): GameState {
   const target = newState.units.find(u => u.id === state.targetUnit!.id);
   
   if (!attacker || !target || !attacker.position || !target.position) return state;
-  
-  const result = executeKick(attacker, target);
-  
-  addLogEntry(newState, result.log, result.success ? 'combat' : 'info');
-  
-  if (!target.alive) {
-    addLogEntry(newState, `${target.name} DESTROYED!`, 'critical');
-    
-    const targetIndex = newState.units.indexOf(target);
-    const isPlayerUnit = targetIndex < newState.units.length / 2;
-    
-    if (isPlayerUnit) {
-      newState.aiScore += target.bv2;
-    } else {
-      newState.playerScore += target.bv2;
-    }
-    
-    const targetHex = getHex(newState.hexGrid, target.position);
-    if (targetHex) {
-      targetHex.unit = null;
-      setHex(newState.hexGrid, targetHex);
-    }
-  }
-  
-  return newState;
-}
 
-// Execute DFA attack
-export function executeDFAAttack(state: GameState): GameState {
-  if (state.phase !== GamePhase.COMBAT) return state;
-  if (!state.selectedUnit || !state.targetUnit) return state;
-  
-  const newState = { ...state };
-  const attacker = newState.units.find(u => u.id === state.selectedUnit!.id);
-  const target = newState.units.find(u => u.id === state.targetUnit!.id);
-  
-  if (!attacker || !target || !attacker.position || !target.position) return state;
-  
-  const result = executeDFA(attacker, target);
-  
+  const distance = hexDistance(attacker.position, target.position);
+  if ((attackType === 'punch' || attackType === 'kick') && distance !== 1) {
+    addLogEntry(newState, `${attacker.name} must be adjacent to punch or kick.`, 'info');
+    return newState;
+  }
+  if (attackType === 'dfa' && (distance > 1 || attacker.movementMode !== MovementMode.JUMPING || attacker.currentMP >= attacker.jumpingMP)) {
+    addLogEntry(newState, `${attacker.name} must jump adjacent to the target before attempting a DFA.`, 'info');
+    return newState;
+  }
+
+  let result: PhysicalAttackResult;
+  if (attackType === 'punch') result = executePunch(attacker, target);
+  else if (attackType === 'kick') result = executeKick(attacker, target);
+  else if (attackType === 'dfa') result = executeDFA(attacker, target);
+  else {
+    if (attacker.movementMode !== MovementMode.RUNNING) {
+      addLogEntry(newState, `${attacker.name} must run before charging.`, 'info');
+      return newState;
+    }
+    const hexesMoved = Math.floor(attacker.runningMP - attacker.currentMP);
+    if (distance !== 1 || hexesMoved <= 0) {
+      addLogEntry(newState, `${attacker.name} must run and end adjacent to charge.`, 'info');
+      return newState;
+    }
+    result = executeCharge(attacker, target, hexesMoved);
+  }
+
   addLogEntry(newState, result.log, result.success ? 'combat' : 'info');
-  
-  // Handle attacker damage from DFA
+  if (result.success && result.damage > 0) {
+    const location = getHitLocation(roll2d6(), target, determineArc(attacker, target));
+    const damage = applyDamage(target, location, result.damage);
+    addLogEntry(newState, `${target.name} takes ${damage.damageDealt} physical damage to ${location}.`, 'combat');
+    damage.criticals.forEach(critical => addLogEntry(newState, `CRITICAL: ${critical.effect}`, 'critical'));
+    if (!target.alive) recordDestroyedUnit(newState, target);
+  }
+
   if (result.attackerDamage && result.attackerDamage > 0) {
-    addLogEntry(newState, `${attacker.name} takes ${result.attackerDamage} damage from DFA fall!`, 'critical');
-  }
-  
-  if (!target.alive) {
-    addLogEntry(newState, `${target.name} DESTROYED!`, 'critical');
-    
-    const targetIndex = newState.units.indexOf(target);
-    const isPlayerUnit = targetIndex < newState.units.length / 2;
-    
-    if (isPlayerUnit) {
-      newState.aiScore += target.bv2;
+    if (attackType === 'dfa') {
+      const rightLegDamage = Math.ceil(result.attackerDamage / 2);
+      const leftLegDamage = result.attackerDamage - rightLegDamage;
+      applyDamage(attacker, 'RL', rightLegDamage);
+      applyDamage(attacker, 'LL', leftLegDamage);
     } else {
-      newState.playerScore += target.bv2;
+      applyDamage(attacker, 'CT', result.attackerDamage);
+      if (attackType === 'kick' || result.log.includes('falls!')) attacker.prone = true;
     }
-    
-    const targetHex = getHex(newState.hexGrid, target.position);
-    if (targetHex) {
-      targetHex.unit = null;
-      setHex(newState.hexGrid, targetHex);
-    }
+    addLogEntry(newState, `${attacker.name} takes ${result.attackerDamage} damage from the physical attack.`, 'critical');
   }
-  
-  if (!attacker.alive) {
-    addLogEntry(newState, `${attacker.name} DESTROYED by DFA fall!`, 'critical');
-    
-    const attackerIndex = newState.units.indexOf(attacker);
-    const isPlayerUnit = attackerIndex < newState.units.length / 2;
-    
-    if (isPlayerUnit) {
-      newState.aiScore += attacker.bv2;
-    } else {
-      newState.playerScore += attacker.bv2;
-    }
-    
-    const attackerHex = getHex(newState.hexGrid, attacker.position);
-    if (attackerHex) {
-      attackerHex.unit = null;
-      setHex(newState.hexGrid, attackerHex);
-    }
-  }
+
+  if (!attacker.alive) recordDestroyedUnit(newState, attacker);
   
   return newState;
+}
+
+export function executePunchAttack(state: GameState): GameState {
+  return resolvePhysicalAttack(state, 'punch');
+}
+
+export function executeKickAttack(state: GameState): GameState {
+  return resolvePhysicalAttack(state, 'kick');
+}
+
+export function executeDFAAttack(state: GameState): GameState {
+  return resolvePhysicalAttack(state, 'dfa');
+}
+
+export function executeChargeAttack(state: GameState): GameState {
+  return resolvePhysicalAttack(state, 'charge');
 }
 
 // End movement phase
@@ -554,17 +515,8 @@ export function evaluateMissionObjective(
 
   const playerUnits = state.units.filter((_, i) => i < state.units.length / 2);
   const enemyUnits = state.units.filter((_, i) => i >= state.units.length / 2);
-  let allRequiredComplete = true;
-  let anyRequiredFailed = false;
 
   objectives.forEach((objective) => {
-    if (objective.status === ObjectiveStatus.FAILED && objective.required) {
-      anyRequiredFailed = true;
-    }
-    if (objective.status !== ObjectiveStatus.COMPLETED && objective.required) {
-      allRequiredComplete = false;
-    }
-
     if (objective.status === ObjectiveStatus.PENDING || objective.status === ObjectiveStatus.IN_PROGRESS) {
       switch (objective.type) {
         case ObjectiveType.ELIMINATE_ALL: {
@@ -593,6 +545,13 @@ export function evaluateMissionObjective(
               objective.status = ObjectiveStatus.COMPLETED;
               objective.progress = 100;
             } else {
+              const remainingHealth = Array.from(target.locations.values())
+                .reduce((sum, location) => sum + location.armor + location.structure, 0);
+              const maximumHealth = Array.from(target.locations.values())
+                .reduce((sum, location) => sum + location.maxArmor + location.maxStructure, 0);
+              objective.progress = maximumHealth > 0
+                ? Math.min(99, Math.floor(((maximumHealth - remainingHealth) / maximumHealth) * 100))
+                : 0;
               objective.status = ObjectiveStatus.IN_PROGRESS;
             }
           }
@@ -626,11 +585,26 @@ export function evaluateMissionObjective(
               );
               return pathCost <= zoneRadius;
             });
-            if (unitsInZone.length > 0) {
+            const holdTurnsRequired = Math.max(1, objective.holdTurnsRequired ?? 3);
+            if (state.phase === GamePhase.COMBAT && objective.lastProgressTurn !== state.turn) {
+              objective.lastProgressTurn = state.turn;
+              objective.captureTurnsHeld = unitsInZone.length > 0
+                ? Math.min(holdTurnsRequired, (objective.captureTurnsHeld ?? 0) + 1)
+                : 0;
+            }
+
+            objective.progress = Math.floor(((objective.captureTurnsHeld ?? 0) / holdTurnsRequired) * 100);
+            if ((objective.captureTurnsHeld ?? 0) >= holdTurnsRequired) {
               objective.status = ObjectiveStatus.COMPLETED;
               objective.progress = 100;
+            } else if (objective.turnLimit !== undefined && state.turn >= objective.turnLimit) {
+              objective.status = ObjectiveStatus.FAILED;
+              objective.progress = Math.min(99, objective.progress);
             } else {
               objective.status = ObjectiveStatus.IN_PROGRESS;
+            }
+            if (objective.turnLimit !== undefined) {
+              objective.turnsRemaining = Math.max(0, objective.turnLimit - state.turn + 1);
             }
           }
           break;
@@ -652,6 +626,8 @@ export function evaluateMissionObjective(
                 objective.status = ObjectiveStatus.COMPLETED;
                 objective.progress = 100;
               } else {
+                const maximumDistance = 10;
+                objective.progress = Math.max(0, Math.min(99, Math.floor(((maximumDistance - distance) / maximumDistance) * 100)));
                 objective.status = ObjectiveStatus.IN_PROGRESS;
               }
             }
@@ -677,6 +653,13 @@ export function evaluateMissionObjective(
       }
     }
   });
+
+  const anyRequiredFailed = objectives.some(
+    objective => objective.required && objective.status === ObjectiveStatus.FAILED
+  );
+  const allRequiredComplete = objectives.every(
+    objective => !objective.required || objective.status === ObjectiveStatus.COMPLETED
+  );
 
   if (anyRequiredFailed) {
     return { gameOver: true, winner: 'ai' };
@@ -760,6 +743,8 @@ export function checkGameOver(state: GameState): { gameOver: boolean; winner: 'p
 }
 
 // AI Turn - Movement and combat AI
+export type AIDifficulty = 'easy' | 'normal' | 'hard';
+
 export function getAIHitProbability(targetNumber: number): number {
   const successfulRollsByTarget: Record<number, number> = {
     2: 36,
@@ -806,7 +791,7 @@ function getAIExpectedWeaponDamage(attacker: Unit, target: Unit, weapon: Unit['w
   return canFire ? weapon.damage * getAIHitProbability(targetNumber) : 0;
 }
 
-function getBestAIWeaponTarget(aiUnit: Unit, enemies: Unit[], grid: Map<string, Hex>): Unit | null {
+function getBestAIWeaponTarget(aiUnit: Unit, enemies: Unit[], grid: Map<string, Hex>, difficulty: AIDifficulty): Unit | null {
   if (!aiUnit.position) return null;
 
   let bestTarget: Unit | null = null;
@@ -847,7 +832,7 @@ function getBestAIWeaponTarget(aiUnit: Unit, enemies: Unit[], grid: Map<string, 
     const focusBonus = maximumHealth > 0 ? (1 - remainingHealth / maximumHealth) * 30 : 0;
     const killBonus = expectedDamage >= remainingHealth ? 35 : 0;
 
-    const score =
+    const tacticalScore =
       hitEfficiency * 2.2 +
       expectedDamage * 0.7 +
       valueBonus -
@@ -859,6 +844,9 @@ function getBestAIWeaponTarget(aiUnit: Unit, enemies: Unit[], grid: Map<string, 
       structureThreat +
       focusBonus +
       killBonus;
+    const score = difficulty === 'easy'
+      ? -distance * 10 + expectedDamage
+      : tacticalScore + (difficulty === 'hard' ? focusBonus + killBonus : 0);
 
     // Apply AMS penalty (deprioritize missile-heavy targets)
     const finalScore = score + amsPenalty;
@@ -872,7 +860,7 @@ function getBestAIWeaponTarget(aiUnit: Unit, enemies: Unit[], grid: Map<string, 
   return bestTarget;
 }
 
-function getBestMovementHex(aiUnit: Unit, enemy: Unit, validHexes: HexCoord[], grid: Map<string, Hex>): HexCoord | null {
+function getBestMovementHex(aiUnit: Unit, enemy: Unit, validHexes: HexCoord[], grid: Map<string, Hex>, difficulty: AIDifficulty): HexCoord | null {
   let bestHex: HexCoord | null = null;
   let bestScore = -Infinity;
   const preferredRange = Math.min(6, Math.max(...aiUnit.weapons.map(w => w.shortRange)));
@@ -889,7 +877,10 @@ function getBestMovementHex(aiUnit: Unit, enemy: Unit, validHexes: HexCoord[], g
     const heatPenalty = aiUnit.heat > 12 ? -(aiUnit.heat - 12) * 3 : 0;
     const spaceBonus = dist <= 1 ? -15 : dist <= 2 ? -6 : 0;
     const coverDefense = targetHex ? (TERRAIN_TYPES[targetHex.terrain].toHitModifier * 4) : 0;
-    const score = coverBonus + losBonus + rangeScore + heatPenalty + spaceBonus - threatPenalty - coverDefense;
+    const tacticalScore = coverBonus + losBonus + rangeScore + heatPenalty + spaceBonus + threatPenalty - coverDefense;
+    const score = difficulty === 'easy'
+      ? -dist + (coverBonus + losBonus) * 0.1
+      : tacticalScore;
 
     if (score > bestScore) {
       bestScore = score;
@@ -900,7 +891,8 @@ function getBestMovementHex(aiUnit: Unit, enemy: Unit, validHexes: HexCoord[], g
   return bestHex;
 }
 
-function chooseAIMovementMode(unit: Unit, targetDistance: number): MovementMode {
+function chooseAIMovementMode(unit: Unit, targetDistance: number, difficulty: AIDifficulty): MovementMode {
+  if (difficulty === 'easy') return MovementMode.WALKING;
   if (unit.heat >= 18 || unit.currentMP <= 1) return MovementMode.WALKING;
   if (unit.heat >= 12) return MovementMode.WALKING;
   if (unit.jumpingMP > 0 && targetDistance >= 5 && unit.currentMP >= 2) return MovementMode.JUMPING;
@@ -967,7 +959,7 @@ function aiConsiderTorsoTwist(state: GameState, aiUnit: Unit, target: Unit): Gam
   return newState;
 }
 
-function fireBestAIWeapons(state: GameState, attacker: Unit, target: Unit): GameState {
+function fireBestAIWeapons(state: GameState, attacker: Unit, target: Unit, difficulty: AIDifficulty): GameState {
   if (!attacker.position || !target.position) return state;
 
   let newState = state;
@@ -990,6 +982,7 @@ function fireBestAIWeapons(state: GameState, attacker: Unit, target: Unit): Game
     if (currentAttacker.heat + weapon.heat >= 30) continue;
 
     newState = fireWeapon(newState, weapon.id);
+    if (difficulty === 'easy') break;
 
     const refAttacker = newState.units.find(u => u.id === attacker.id);
     const refTarget = newState.units.find(u => u.id === target.id);
@@ -1001,7 +994,7 @@ function fireBestAIWeapons(state: GameState, attacker: Unit, target: Unit): Game
   return newState;
 }
 
-export function executeAITurn(state: GameState): GameState {
+export function executeAITurn(state: GameState, difficulty: AIDifficulty = 'normal'): GameState {
   let newState = { ...state };
   const aiUnits = newState.units.filter((_, i) => i >= newState.units.length / 2 && _.alive && !_.shutdown && !_.immobile);
   const playerUnits = newState.units.filter((_, i) => i < newState.units.length / 2 && _.alive);
@@ -1030,10 +1023,10 @@ export function executeAITurn(state: GameState): GameState {
       newState = selectUnit(newState, aiUnit);
       if (newState.validMoveHexes.length === 0) continue;
 
-      const bestTarget = getBestAIWeaponTarget(aiUnit, playerUnits, newState.hexGrid) || nearestEnemy;
+      const bestTarget = getBestAIWeaponTarget(aiUnit, playerUnits, newState.hexGrid, difficulty) || nearestEnemy;
       const targetDistance = bestTarget.position ? hexDistance(aiUnit.position, bestTarget.position) : nearestDistance;
-      const movementMode = chooseAIMovementMode(aiUnit, targetDistance);
-      const bestHex = getBestMovementHex(aiUnit, bestTarget, newState.validMoveHexes, newState.hexGrid);
+      const movementMode = chooseAIMovementMode(aiUnit, targetDistance, difficulty);
+      const bestHex = getBestMovementHex(aiUnit, bestTarget, newState.validMoveHexes, newState.hexGrid, difficulty);
 
       if (bestHex) {
         newState = moveSelectedUnit(newState, bestHex, movementMode);
@@ -1048,14 +1041,14 @@ export function executeAITurn(state: GameState): GameState {
     for (const aiUnit of aiUnits) {
       if (!aiUnit.position) continue;
 
-      const target = getBestAIWeaponTarget(aiUnit, playerUnits, newState.hexGrid);
+      const target = getBestAIWeaponTarget(aiUnit, playerUnits, newState.hexGrid, difficulty);
       if (!target) continue;
 
       newState = selectUnit(newState, aiUnit);
       newState = selectTarget(newState, target);
       // AI may consider torso-twisting to better face the target
       newState = aiConsiderTorsoTwist(newState, aiUnit, target);
-      newState = fireBestAIWeapons(newState, aiUnit, target);
+      newState = fireBestAIWeapons(newState, aiUnit, target, difficulty);
       addLogEntry(newState, `${aiUnit.name} engages ${target.name}`, 'system');
     }
   }

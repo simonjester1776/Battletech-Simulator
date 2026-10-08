@@ -31,6 +31,7 @@ interface BattleScreenProps {
   onPunchAttack: () => void;
   onKickAttack: () => void;
   onDFAAttack: () => void;
+  onChargeAttack: () => void;
   onTorsoTwist: (direction: 'left' | 'right') => void;
   onRestart: () => void;
   onToggleAMS: () => void;
@@ -54,6 +55,7 @@ export function BattleScreen({
   onPunchAttack,
   onKickAttack,
   onDFAAttack,
+  onChargeAttack,
   onTorsoTwist,
   onToggleAMS,
   onRestart,
@@ -361,6 +363,7 @@ export function BattleScreen({
             onPunchAttack={onPunchAttack}
             onKickAttack={onKickAttack}
             onDFAAttack={onDFAAttack}
+            onChargeAttack={onChargeAttack}
             onTorsoTwist={onTorsoTwist}
             onToggleAMS={onToggleAMS}
             onRestart={onRestart}

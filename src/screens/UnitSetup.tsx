@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Play } from 'lucide-react';
 import type { Unit } from '@/types/battletech';
+import type { AIDifficulty } from '@/engine/game';
 import type { Contract } from '@/lib/campaign';
 import { getMechIcon, getMechSmallImage, hasMechImages } from '@/lib/mech-images';
 
@@ -12,6 +13,10 @@ interface UnitSetupProps {
   playerSelections: string[];
   aiSelections: string[];
   contract?: Contract | null;
+  networkWaiting?: boolean;
+  showAIDifficulty?: boolean;
+  aiDifficulty?: AIDifficulty;
+  onAIDifficultyChange?: (difficulty: AIDifficulty) => void;
   onPlayerSelectionChange: (selections: string[]) => void;
   onAiSelectionChange: (selections: string[]) => void;
   onStartGame: () => void;
@@ -23,6 +28,10 @@ export function UnitSetup({
   playerSelections,
   aiSelections,
   contract,
+  networkWaiting = false,
+  showAIDifficulty = false,
+  aiDifficulty = 'normal',
+  onAIDifficultyChange,
   onPlayerSelectionChange,
   onAiSelectionChange,
   onStartGame,
@@ -61,12 +70,11 @@ export function UnitSetup({
           
           <Button
             onClick={onStartGame}
-            disabled={playerSelections.length === 0 || aiSelections.length === 0}
+            disabled={networkWaiting || playerSelections.length === 0 || aiSelections.length === 0}
             className="bg-blue-600 hover:bg-blue-700"
             data-testid="start-battle-btn"
           >
-            <Play className="w-4 h-4 mr-2" />
-            Start Battle
+            {networkWaiting ? 'Waiting for Host Deployment' : <><Play className="w-4 h-4 mr-2" />Start Battle</>}
           </Button>
         </div>
         {contract && (
@@ -83,6 +91,21 @@ export function UnitSetup({
               </div>
             </div>
           </div>
+        )}
+        {showAIDifficulty && onAIDifficultyChange && (
+          <label className="mb-6 flex w-fit items-center gap-3 text-sm text-gray-300">
+            Enemy AI
+            <select
+              aria-label="Enemy AI difficulty"
+              value={aiDifficulty}
+              onChange={event => onAIDifficultyChange(event.target.value as AIDifficulty)}
+              className="rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+            >
+              <option value="easy">Easy</option>
+              <option value="normal">Normal</option>
+              <option value="hard">Hard</option>
+            </select>
+          </label>
         )}
         
         <div className="grid lg:grid-cols-2 gap-6">

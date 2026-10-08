@@ -1,6 +1,6 @@
 // BattleTech Tactical Simulator - Refactored Main App
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { GameState, Unit, Hex } from '@/types/battletech';
 import { MovementMode } from '@/types/battletech';
 import { 
@@ -14,6 +14,7 @@ import {
   executePunchAttack,
   executeKickAttack,
   executeDFAAttack,
+  executeChargeAttack,
   endMovementPhase,
   endCombatPhase,
   endHeatPhase,
@@ -23,11 +24,13 @@ import {
   evaluateMissionObjective,
   checkGameOver
 } from '@/engine/game';
+import type { AIDifficulty } from '@/engine/game';
 import { getHexKey } from '@/engine/hexgrid';
 import { getAllUnits, cloneUnit } from '@/engine/units';
 import { CampaignManager } from '@/lib/campaign';
 import type { Contract } from '@/lib/campaign';
 import type { GameMode } from '@/lib/multiplayer';
+import { deserializeGameState, multiplayerClient, serializeGameState, type SerializedGameState } from '@/lib/websocket-client';
 import {
   generateEliminationMission,
   generateAssassinationMission,
@@ -49,17 +52,31 @@ import { MechLab } from '@/components/MechLab';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
 type AppScreen = 'main-menu' | 'setup' | 'game' | 'campaign' | 'multiplayer-lobby' | 'network-lobby' | 'mech-lab';
+interface NetworkSession {
+  roomId: string;
+  isHost: boolean;
+  playerId: string;
+}
+
+interface NetworkStateSyncMessage {
+  revision: number;
+  game_state: SerializedGameState;
+}
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('main-menu');
   const [gameMode, setGameMode] = useState<GameMode>('hotseat');
+  const [aiDifficulty, setAIDifficulty] = useState<AIDifficulty>('normal');
   const [gameState, setGameState] = useState<GameState | null>(null);
+  const [networkSession, setNetworkSession] = useState<NetworkSession | null>(null);
   const [gameOver, setGameOver] = useState<{ gameOver: boolean; winner: 'player' | 'ai' | 'draw' | null } | null>(null);
   
   const [campaignManager, setCampaignManager] = useState<CampaignManager | null>(null);
   const [currentContract, setCurrentContract] = useState<Contract | null>(null);
   const battleResultsProcessedRef = useRef(false);
   const lastGameOverRef = useRef<{ gameOver: boolean; winner: 'player' | 'ai' | 'draw' | null } | null>(null);
+  const networkRevisionRef = useRef(0);
+  const applyingNetworkStateRef = useRef(false);
   
   const initialUnits = getAllUnits();
   const [availableUnits, setAvailableUnits] = useState<Unit[]>(initialUnits);
@@ -168,7 +185,42 @@ function App() {
     return state;
   }, [campaignManager, currentContract, playerSelections]);
 
+  useEffect(() => {
+    if (!networkSession) return;
+
+    const handleStateSync = (message: NetworkStateSyncMessage) => {
+      if (!message?.game_state || message.revision <= networkRevisionRef.current) return;
+      try {
+        networkRevisionRef.current = message.revision;
+        applyingNetworkStateRef.current = true;
+        setGameState(syncGameState(deserializeGameState(message.game_state)));
+        setCurrentScreen('game');
+      } catch (error) {
+        console.error('Failed to apply network game state:', error);
+        toast.error('Received an invalid game-state update.');
+      }
+    };
+
+    multiplayerClient.on('state_sync', handleStateSync);
+    return () => multiplayerClient.off('state_sync');
+  }, [networkSession, syncGameState]);
+
+  useEffect(() => {
+    if (!gameState || gameMode !== 'network' || !networkSession) return;
+    if (applyingNetworkStateRef.current) {
+      applyingNetworkStateRef.current = false;
+      return;
+    }
+
+    multiplayerClient.sendGameState({
+      revision: networkRevisionRef.current,
+      game_state: serializeGameState(gameState),
+    });
+  }, [gameMode, gameState, networkSession]);
+
   const startGame = useCallback(() => {
+    if (gameMode === 'network' && !networkSession?.isHost) return;
+
     const playerUnits = playerSelections.map(id => {
       const template = availableUnits.find(u => u.id === id);
       return template ? cloneUnit(template) : cloneUnit(availableUnits[0]);
@@ -185,7 +237,7 @@ function App() {
     lastGameOverRef.current = null;
     setGameState(syncGameState(newGame));
     setCurrentScreen('game');
-  }, [playerSelections, aiSelections, availableUnits, currentContract, generateMissionObjectives, syncGameState]);
+  }, [playerSelections, aiSelections, availableUnits, currentContract, generateMissionObjectives, syncGameState, gameMode, networkSession]);
   
   const restartGame = useCallback(() => {
     battleResultsProcessedRef.current = false;
@@ -194,6 +246,9 @@ function App() {
     setCurrentScreen('main-menu');
     setGameOver(null);
     setCurrentContract(null);
+    setNetworkSession(null);
+    networkRevisionRef.current = 0;
+    multiplayerClient.disconnect();
   }, []);
   
   const startCampaign = useCallback(() => {
@@ -258,9 +313,9 @@ function App() {
   }, []);
 
   const handleStartNetworkGame = useCallback((roomId: string, isHost: boolean, playerId: string) => {
-    void roomId;
-    void isHost;
-    void playerId;
+    setNetworkSession({ roomId, isHost, playerId });
+    networkRevisionRef.current = 0;
+    setGameState(null);
     setGameMode('network');
     setCurrentScreen('setup');
   }, []);
@@ -271,26 +326,47 @@ function App() {
     const { state } = rollInitiative(gameState);
     setGameState(syncGameState(state));
   }, [gameState, syncGameState]);
+
+  const canControlUnit = useCallback((unit: Unit, state: GameState): boolean => {
+    const unitIndex = state.units.findIndex(candidate => candidate.id === unit.id);
+    const isPlayerUnit = unitIndex >= 0 && unitIndex < state.units.length / 2;
+    if (gameMode === 'hotseat') return unitIndex >= 0;
+    if (gameMode === 'network') return unitIndex >= 0 && isPlayerUnit === (networkSession?.isHost ?? false);
+    return isPlayerUnit;
+  }, [gameMode, networkSession]);
   
   const handleHexClick = useCallback((hex: Hex) => {
     if (!gameState || gameState.phase === 'initiative') return;
 
     const isPlayerUnit = (unit: Unit) => gameState.units.indexOf(unit) < gameState.units.length / 2;
-    const canControlUnit = (unit: Unit) => gameMode === 'hotseat' || isPlayerUnit(unit);
 
     if (gameState.phase === 'movement' && gameState.selectedUnit) {
+      if (!canControlUnit(gameState.selectedUnit, gameState)) {
+        if (hex.unit && canControlUnit(hex.unit, gameState)) {
+          setGameState(selectUnit(gameState, hex.unit));
+        }
+        return;
+      }
+
       const hexKey = getHexKey(hex.coord);
       const isValidMove = gameState.validMoveHexes.some(h => getHexKey(h) === hexKey);
       
       if (isValidMove) {
         const newState = moveSelectedUnit(gameState, hex.coord, gameState.selectedUnit.movementMode);
-        setGameState(newState);
-      } else if (hex.unit && canControlUnit(hex.unit)) {
+        setGameState(syncGameState(newState));
+      } else if (hex.unit && canControlUnit(hex.unit, gameState)) {
         const newState = selectUnit(gameState, hex.unit);
         setGameState(newState);
       }
     } else if (gameState.phase === 'combat') {
       if (hex.unit) {
+        if (gameState.selectedUnit && !canControlUnit(gameState.selectedUnit, gameState)) {
+          if (canControlUnit(hex.unit, gameState)) {
+            setGameState(selectUnit(gameState, hex.unit));
+          }
+          return;
+        }
+
         const selectedIsSameSide = gameState.selectedUnit
           ? isPlayerUnit(gameState.selectedUnit) === isPlayerUnit(hex.unit)
           : false;
@@ -301,7 +377,7 @@ function App() {
           selectedIsSameSide
         );
 
-        if (canControlUnit(hex.unit) && (gameMode !== 'hotseat' || isNewHotseatAttacker)) {
+        if (canControlUnit(hex.unit, gameState) && (gameMode !== 'hotseat' || isNewHotseatAttacker)) {
           const newState = selectUnit(gameState, hex.unit);
           setGameState(newState);
           return;
@@ -313,20 +389,20 @@ function App() {
         }
       }
     } else if (hex.unit) {
-      if (canControlUnit(hex.unit)) {
+      if (canControlUnit(hex.unit, gameState)) {
         const newState = selectUnit(gameState, hex.unit);
         setGameState(newState);
       }
     }
-  }, [gameMode, gameState]);
+  }, [canControlUnit, gameMode, gameState, syncGameState]);
   
   const handleEndMovement = useCallback(() => {
     if (!gameState) return;
     const newState = gameMode === 'ai'
-      ? executeAITurn(gameState)
+      ? executeAITurn(gameState, aiDifficulty)
       : endMovementPhase(gameState);
     setGameState(syncGameState(newState));
-  }, [gameMode, gameState, syncGameState]);
+  }, [aiDifficulty, gameMode, gameState, syncGameState]);
   
   const handleEndCombat = useCallback(() => {
     if (!gameState) return;
@@ -341,7 +417,7 @@ function App() {
   }, [gameState, syncGameState]);
   
   const handleMovementModeChange = useCallback((mode: MovementMode) => {
-    if (!gameState || !gameState.selectedUnit) return;
+    if (!gameState || !gameState.selectedUnit || !canControlUnit(gameState.selectedUnit, gameState)) return;
 
     setGameState(prev => {
       if (!prev || !prev.selectedUnit) return prev;
@@ -364,10 +440,10 @@ function App() {
         selectedUnit: { ...prev.selectedUnit, movementMode: mode, currentMP: mode === 'running' ? prev.selectedUnit.runningMP : mode === 'jumping' ? prev.selectedUnit.jumpingMP : prev.selectedUnit.walkingMP },
       };
     });
-  }, [gameState]);
+  }, [canControlUnit, gameState]);
   
   const handleFireWeapon = useCallback((weaponId: string) => {
-    if (!gameState) return;
+    if (!gameState || (gameState.selectedUnit && !canControlUnit(gameState.selectedUnit, gameState))) return;
     const newState = fireWeapon(gameState, weaponId);
     setGameState(syncGameState(newState));
 
@@ -393,55 +469,63 @@ function App() {
           break;
       }
     }
-  }, [gameState, syncGameState]);
+  }, [canControlUnit, gameState, syncGameState]);
 
   const handleFireAllWeapons = useCallback(() => {
-    if (!gameState) return;
+    if (!gameState || (gameState.selectedUnit && !canControlUnit(gameState.selectedUnit, gameState))) return;
     const newState = fireAllWeapons(gameState);
     setGameState(syncGameState(newState));
-  }, [gameState, syncGameState]);
+  }, [canControlUnit, gameState, syncGameState]);
   
   const handleToggleAMS = useCallback(() => {
-    if (!gameState || !gameState.selectedUnit) return;
+    if (!gameState || !gameState.selectedUnit || !canControlUnit(gameState.selectedUnit, gameState)) return;
     const newState = toggleAMSActive(gameState, gameState.selectedUnit.id);
     setGameState(syncGameState(newState));
-  }, [gameState, syncGameState]);
+  }, [canControlUnit, gameState, syncGameState]);
   
   const handlePunchAttack = useCallback(() => {
-    if (!gameState) return;
+    if (!gameState || (gameState.selectedUnit && !canControlUnit(gameState.selectedUnit, gameState))) return;
     const newState = executePunchAttack(gameState);
     setGameState(syncGameState(newState));
-  }, [gameState, syncGameState]);
+  }, [canControlUnit, gameState, syncGameState]);
   
   const handleKickAttack = useCallback(() => {
-    if (!gameState) return;
+    if (!gameState || (gameState.selectedUnit && !canControlUnit(gameState.selectedUnit, gameState))) return;
     const newState = executeKickAttack(gameState);
     setGameState(syncGameState(newState));
-  }, [gameState, syncGameState]);
+  }, [canControlUnit, gameState, syncGameState]);
   
   const handleDFAAttack = useCallback(() => {
-    if (!gameState) return;
+    if (!gameState || (gameState.selectedUnit && !canControlUnit(gameState.selectedUnit, gameState))) return;
     const newState = executeDFAAttack(gameState);
     setGameState(syncGameState(newState));
-  }, [gameState, syncGameState]);
+  }, [canControlUnit, gameState, syncGameState]);
+
+  const handleChargeAttack = useCallback(() => {
+    if (!gameState || (gameState.selectedUnit && !canControlUnit(gameState.selectedUnit, gameState))) return;
+    const newState = executeChargeAttack(gameState);
+    setGameState(syncGameState(newState));
+  }, [canControlUnit, gameState, syncGameState]);
   
   const handleTorsoTwist = useCallback((direction: 'left' | 'right') => {
-    if (!gameState || !gameState.selectedUnit) return;
+    if (!gameState || !gameState.selectedUnit || !canControlUnit(gameState.selectedUnit, gameState)) return;
     const steps = direction === 'left' ? -1 : 1;
     const newState = performTorsoTwist(gameState, gameState.selectedUnit.id, steps);
     setGameState(syncGameState(newState));
-  }, [gameState, syncGameState]);
+  }, [canControlUnit, gameState, syncGameState]);
 
   // Screen rendering
   if (currentScreen === 'main-menu') {
     return (
       <MainMenu
         onSinglePlayer={() => {
+          setNetworkSession(null);
           setGameMode('ai');
           setCurrentScreen('setup');
         }}
         onCampaign={startCampaign}
         onHotseat={() => {
+          setNetworkSession(null);
           setGameMode('hotseat');
           setCurrentScreen('setup');
         }}
@@ -507,6 +591,10 @@ function App() {
         playerSelections={playerSelections}
         aiSelections={aiSelections}
         contract={currentContract}
+        networkWaiting={gameMode === 'network' && !networkSession?.isHost}
+        showAIDifficulty={gameMode === 'ai'}
+        aiDifficulty={aiDifficulty}
+        onAIDifficultyChange={setAIDifficulty}
         onPlayerSelectionChange={setPlayerSelections}
         onAiSelectionChange={setAiSelections}
         onStartGame={startGame}
@@ -530,6 +618,7 @@ function App() {
         onPunchAttack={handlePunchAttack}
         onKickAttack={handleKickAttack}
         onDFAAttack={handleDFAAttack}
+        onChargeAttack={handleChargeAttack}
         onTorsoTwist={handleTorsoTwist}
         onToggleAMS={handleToggleAMS}
         onFireWeapon={handleFireWeapon}

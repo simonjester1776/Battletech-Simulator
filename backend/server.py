@@ -19,9 +19,6 @@ app.add_middleware(
 
 # Game rooms storage
 rooms: Dict[str, dict] = {}
-# Active WebSocket connections per room
-connections: Dict[str, List[WebSocket]] = {}
-
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, Set[WebSocket]] = {}
@@ -54,6 +51,14 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+async def send_event(websocket: WebSocket, event_type: str, data: dict):
+    await websocket.send_json({
+        "type": event_type,
+        "playerId": data.get("player_id", "server"),
+        "data": data,
+        "timestamp": datetime.now().timestamp(),
+    })
+
 @app.get("/api/health")
 async def health_check():
     return {"status": "healthy", "service": "battletech-multiplayer", "timestamp": datetime.now().isoformat()}
@@ -67,6 +72,7 @@ async def create_room():
         "host": None,
         "players": [],
         "game_state": None,
+        "revision": 0,
         "created_at": datetime.now().isoformat(),
         "status": "waiting"
     }
@@ -87,17 +93,18 @@ async def list_rooms():
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
     """WebSocket endpoint for real-time game synchronization"""
-    
-    # Create room if it doesn't exist
+
     if room_id not in rooms:
-        rooms[room_id] = {
-            "id": room_id,
-            "host": None,
-            "players": [],
-            "game_state": None,
-            "created_at": datetime.now().isoformat(),
-            "status": "waiting"
-        }
+        await websocket.accept()
+        await send_event(websocket, "error", {"message": "Room not found"})
+        await websocket.close(code=1008)
+        return
+
+    if len(rooms[room_id]["players"]) >= 2:
+        await websocket.accept()
+        await send_event(websocket, "error", {"message": "Room is full"})
+        await websocket.close(code=1008)
+        return
     
     await manager.connect(websocket, room_id)
     
@@ -112,56 +119,86 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
         rooms[room_id]["players"].append(player_id)
         
         # Send welcome message
-        await websocket.send_json({
-            "type": "connected",
+        await send_event(websocket, "connected", {
             "player_id": player_id,
             "is_host": player_id == rooms[room_id]["host"],
-            "room": rooms[room_id]
+            "room": rooms[room_id],
         })
         
         # Notify other players
         await manager.broadcast({
             "type": "player_joined",
-            "player_id": player_id,
-            "total_players": len(rooms[room_id]["players"])
+            "playerId": player_id,
+            "data": {"player_id": player_id, "total_players": len(rooms[room_id]["players"])},
+            "timestamp": datetime.now().timestamp(),
         }, room_id, exclude=websocket)
         
         # Main message loop
         while True:
             data = await websocket.receive_text()
             message = json.loads(data)
+            message_type = message.get("type")
+            payload = message.get("data") or {}
             
             # Handle different message types
-            if message["type"] == "game_state_update":
-                # Update and broadcast game state
-                rooms[room_id]["game_state"] = message["game_state"]
+            if message_type == "state_update":
+                if rooms[room_id]["status"] != "in_progress":
+                    await send_event(websocket, "error", {"message": "Game has not started"})
+                    continue
+
+                if payload.get("revision") != rooms[room_id]["revision"]:
+                    await send_event(websocket, "state_sync", {
+                        "revision": rooms[room_id]["revision"],
+                        "game_state": rooms[room_id]["game_state"],
+                        "from_player": "server",
+                    })
+                    continue
+
+                rooms[room_id]["game_state"] = payload.get("game_state")
+                rooms[room_id]["revision"] += 1
                 await manager.broadcast({
-                    "type": "game_state_sync",
-                    "game_state": message["game_state"],
-                    "from_player": player_id
-                }, room_id, exclude=websocket)
-            
-            elif message["type"] == "chat":
-                # Broadcast chat message
-                await manager.broadcast({
-                    "type": "chat",
-                    "player_id": player_id,
-                    "message": message["message"],
-                    "timestamp": datetime.now().isoformat()
+                    "type": "state_sync",
+                    "playerId": player_id,
+                    "data": {
+                        "revision": rooms[room_id]["revision"],
+                        "game_state": rooms[room_id]["game_state"],
+                        "from_player": player_id,
+                    },
+                    "timestamp": datetime.now().timestamp(),
                 }, room_id)
             
-            elif message["type"] == "start_game":
-                # Host starts the game
-                if player_id == rooms[room_id]["host"]:
+            elif message_type == "chat":
+                await manager.broadcast({
+                    "type": "chat",
+                    "playerId": player_id,
+                    "data": {"player_id": player_id, "message": payload.get("message", "")[:500]},
+                    "timestamp": datetime.now().timestamp(),
+                }, room_id)
+            
+            elif message_type == "start_game":
+                if player_id != rooms[room_id]["host"]:
+                    await send_event(websocket, "error", {"message": "Only the host can start the game"})
+                elif len(rooms[room_id]["players"]) < 2:
+                    await send_event(websocket, "error", {"message": "Need two players to start"})
+                else:
                     rooms[room_id]["status"] = "in_progress"
                     await manager.broadcast({
                         "type": "game_started",
-                        "game_state": message.get("game_state")
+                        "playerId": player_id,
+                        "data": {"room_id": room_id},
+                        "timestamp": datetime.now().timestamp(),
                     }, room_id)
+
+            elif message_type == "leave":
+                await websocket.close(code=1000)
+                raise WebSocketDisconnect(code=1000)
+
+            elif message_type == "ping":
+                await send_event(websocket, "pong", {})
     
     except WebSocketDisconnect:
         manager.disconnect(websocket, room_id)
-        if room_id in rooms:
+        if room_id in rooms and player_id in rooms[room_id]["players"]:
             rooms[room_id]["players"].remove(player_id)
             
             # If host left, assign new host
@@ -174,8 +211,9 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
             else:
                 await manager.broadcast({
                     "type": "player_left",
-                    "player_id": player_id,
-                    "total_players": len(rooms[room_id]["players"])
+                    "playerId": player_id,
+                    "data": {"player_id": player_id, "total_players": len(rooms[room_id]["players"])},
+                    "timestamp": datetime.now().timestamp(),
                 }, room_id)
 
 @app.delete("/api/rooms/{room_id}")

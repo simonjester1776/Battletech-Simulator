@@ -220,6 +220,62 @@ export function getMovementCost(unit: Unit, hex: Hex, fromHex: Hex): number {
   return cost;
 }
 
+function getMaxMovementPoints(unit: Unit): number {
+  let maxMP = Math.max(0, unit.currentMP + getHeatEffectForMovement(unit.heat).mpMod);
+  if (unit.locations.get('RL')?.structure === 0) maxMP = Math.floor(maxMP / 2);
+  if (unit.locations.get('LL')?.structure === 0) maxMP = Math.floor(maxMP / 2);
+  return maxMP;
+}
+
+function getReachableMovementCosts(
+  unit: Unit,
+  grid: Map<string, Hex>,
+  allUnits: Unit[],
+  movementMode: MovementMode,
+  maxMP: number
+): Map<string, number> {
+  const costs = new Map<string, number>();
+  if (!unit.position || maxMP <= 0 || !getHex(grid, unit.position)) return costs;
+
+  const startKey = getHexKey(unit.position);
+  const pending = [{ coord: unit.position, cost: 0 }];
+  costs.set(startKey, 0);
+
+  while (pending.length > 0) {
+    pending.sort((a, b) => a.cost - b.cost);
+    const current = pending.shift()!;
+    const currentKey = getHexKey(current.coord);
+    if (current.cost !== costs.get(currentKey)) continue;
+
+    const currentHex = getHex(grid, current.coord);
+    if (!currentHex) continue;
+
+    for (const neighbor of getNeighbors(current.coord)) {
+      const neighborKey = getHexKey(neighbor);
+      const neighborHex = getHex(grid, neighbor);
+      if (!neighborHex) continue;
+
+      const occupied = (neighborHex.unit && neighborHex.unit.id !== unit.id && neighborHex.unit.alive) ||
+        allUnits.some(other => other.id !== unit.id && other.alive && other.position &&
+          other.position.q === neighbor.q && other.position.r === neighbor.r);
+      if (occupied) continue;
+
+      const moveCost = movementMode === MovementMode.JUMPING
+        ? 1
+        : getMovementCost(unit, neighborHex, currentHex);
+      if (moveCost >= 99) continue;
+
+      const newCost = current.cost + moveCost;
+      if (newCost > maxMP || newCost >= (costs.get(neighborKey) ?? Infinity)) continue;
+
+      costs.set(neighborKey, newCost);
+      pending.push({ coord: neighbor, cost: newCost });
+    }
+  }
+
+  return costs;
+}
+
 // Get heat effect for movement
 function getHeatEffectForMovement(heat: number): { mpMod: number; toHitMod: number; shutdownRoll: number; ammoExplosionRoll: number; description: string } {
   let effect = HEAT_SCALE_EFFECTS[0];
@@ -251,76 +307,10 @@ export function getValidMovementHexes(
   // Don't allow movement if the unit is standing, prone, immobile, or shutdown
   if (unit.movementMode === MovementMode.STANDING || unit.prone || unit.shutdown) return [];
 
-  // Remaining MP is based on current MP after any movement has already been used
-  let maxMP = unit.currentMP;
-  
-  // Apply heat effects to remaining MP
-  const heatEffect = getHeatEffectForMovement(unit.heat);
-  maxMP = Math.max(0, maxMP + heatEffect.mpMod);
-  
-  // Apply leg damage
-  const rl = unit.locations.get('RL');
-  const ll = unit.locations.get('LL');
-  if (rl && rl.structure <= 0) maxMP = Math.floor(maxMP / 2);
-  if (ll && ll.structure <= 0) maxMP = Math.floor(maxMP / 2);
-  
-  if (maxMP <= 0) return [];
-  
-  // BFS to find all reachable hexes
-  const visited = new Map<string, number>();
-  const queue: { coord: HexCoord; mpUsed: number }[] = [{ coord: unit.position, mpUsed: 0 }];
-  
-  visited.set(getHexKey(unit.position), 0);
-  
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    const currentHex = getHex(grid, current.coord);
-    if (!currentHex) continue;
-    
-    // Check all neighbors
-    const neighbors = getNeighbors(current.coord);
-    
-    for (const neighbor of neighbors) {
-      const neighborHex = getHex(grid, neighbor);
-      if (!neighborHex) continue;
-      
-      // Check if occupied by another unit
-      const occupied = allUnits.some(u => 
-        u.id !== unit.id && 
-        u.alive && 
-        u.position && 
-        u.position.q === neighbor.q && 
-        u.position.r === neighbor.r
-      );
-      
-      if (occupied) continue;
-      
-      // Calculate movement cost
-      const moveCost = unit.movementMode === MovementMode.JUMPING 
-        ? 1 
-        : getMovementCost(unit, neighborHex, currentHex);
-      
-      if (moveCost >= 99) continue;
-      
-      const newMPUsed = current.mpUsed + moveCost;
-      
-      if (newMPUsed <= maxMP) {
-        const neighborKey = getHexKey(neighbor);
-        const existingMP = visited.get(neighborKey);
-        
-        if (existingMP === undefined || newMPUsed < existingMP) {
-          visited.set(neighborKey, newMPUsed);
-          queue.push({ coord: neighbor, mpUsed: newMPUsed });
-          
-          // Don't add the starting position
-          if (neighborKey !== getHexKey(unit.position)) {
-            validHexes.push(neighbor);
-          }
-        }
-      }
-    }
+  const costs = getReachableMovementCosts(unit, grid, allUnits, unit.movementMode, getMaxMovementPoints(unit));
+  for (const [key] of costs) {
+    if (key !== getHexKey(unit.position)) validHexes.push(parseHexKey(key));
   }
-  
   return validHexes;
 }
 
@@ -329,7 +319,8 @@ export function moveUnit(
   unit: Unit, 
   toCoord: HexCoord, 
   grid: Map<string, Hex>,
-  movementMode: MovementMode
+  movementMode: MovementMode,
+  allUnits: Unit[] = [unit]
 ): { success: boolean; mpUsed: number; message: string } {
   if (!unit.position) {
     return { success: false, mpUsed: 0, message: 'Unit has no position' };
@@ -341,12 +332,12 @@ export function moveUnit(
   if (!fromHex || !toHex) {
     return { success: false, mpUsed: 0, message: 'Invalid hex' };
   }
+
+  if (getHexKey(unit.position) === getHexKey(toCoord)) {
+    return { success: false, mpUsed: 0, message: 'Unit is already in that hex' };
+  }
   
   // Calculate MP cost
-  const mpCost = movementMode === MovementMode.JUMPING 
-    ? hexDistance(unit.position, toCoord)
-    : getMovementCost(unit, toHex, fromHex);
-  
   if (movementMode === MovementMode.STANDING) {
     return { success: false, mpUsed: 0, message: 'Standing units cannot move' };
   }
@@ -355,11 +346,22 @@ export function moveUnit(
     return { success: false, mpUsed: 0, message: 'Unit cannot move' };
   }
 
+  if (toHex.unit && toHex.unit.id !== unit.id && toHex.unit.alive) {
+    return { success: false, mpUsed: 0, message: 'That hex is occupied' };
+  }
+
+  const maxMP = getMaxMovementPoints(unit);
+  const movementCosts = getReachableMovementCosts(unit, grid, allUnits, movementMode, maxMP);
+  const mpCost = movementCosts.get(getHexKey(toCoord));
+  if (mpCost === undefined) {
+    return { success: false, mpUsed: 0, message: 'No legal path to that hex' };
+  }
+
   if (mpCost >= 99) {
     return { success: false, mpUsed: 0, message: 'Cannot enter that terrain' };
   }
 
-  if (mpCost > unit.currentMP) {
+  if (mpCost > maxMP) {
     return { success: false, mpUsed: 0, message: `Not enough movement points (${unit.currentMP} MP remaining)` };
   }
   

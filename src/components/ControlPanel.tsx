@@ -31,6 +31,7 @@ interface ControlPanelProps {
   onPunchAttack: () => void;
   onKickAttack: () => void;
   onDFAAttack: () => void;
+  onChargeAttack: () => void;
   onTorsoTwist: (direction: 'left' | 'right') => void;
   onRestart: () => void;
   onToggleAMS: () => void;
@@ -48,6 +49,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onPunchAttack,
   onKickAttack,
   onDFAAttack,
+  onChargeAttack,
   onTorsoTwist,
   onToggleAMS,
   onRestart
@@ -257,6 +259,18 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   >
                     🦵 Kick
                   </Button>
+                  {selectedUnit.movementMode === MovementMode.RUNNING &&
+                    selectedUnit.currentMP < selectedUnit.runningMP && targetDistance === 1 && (
+                      <Button
+                        onClick={onChargeAttack}
+                        variant="outline"
+                        className="bg-orange-900/30 hover:bg-orange-800/40 border-orange-600"
+                        data-testid="charge-btn"
+                        title="Charge (Run and end adjacent)"
+                      >
+                        Charge
+                      </Button>
+                    )}
                   {selectedUnit.jumpingMP > 0 && (
                     <Button 
                       onClick={onDFAAttack}

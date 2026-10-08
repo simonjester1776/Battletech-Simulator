@@ -41,6 +41,9 @@ export interface MissionObjective {
   targetUnitId?: string;
   targetZone?: HexCoord;
   zoneRadius?: number;
+  holdTurnsRequired?: number;
+  captureTurnsHeld?: number;
+  lastProgressTurn?: number;
   turnLimit?: number;
   turnsRemaining?: number;
   structureId?: string;
@@ -337,17 +340,23 @@ export function generateDefenseMission(turns: number): MissionObjective {
 }
 
 export function generateCaptureMission(zone: HexCoord, radius: number): MissionObjective {
+  const holdTurnsRequired = 3;
+  const turnLimit = 8;
   return {
     id: 'capture-primary',
     type: ObjectiveType.CAPTURE_ZONE,
     title: 'Capture Strategic Point',
-    description: `Secure and hold the designated zone for mission success`,
+    description: `Secure the designated zone and hold it for ${holdTurnsRequired} turns`,
     status: ObjectiveStatus.PENDING,
     required: true,
     progress: 0,
     progressMax: 100,
     targetZone: zone,
     zoneRadius: radius,
+    holdTurnsRequired,
+    captureTurnsHeld: 0,
+    turnLimit,
+    turnsRemaining: turnLimit,
     reward: {
       cbills: 160000,
       salvage: 3,
